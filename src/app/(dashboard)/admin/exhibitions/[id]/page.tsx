@@ -1,0 +1,530 @@
+'use client';
+
+import * as React from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
+import {
+  ArrowLeft,
+  Calendar,
+  MapPin,
+  Ticket,
+  Users,
+  Edit3,
+  Pause,
+  Play,
+  Trash,
+  AlertTriangle,
+  BarChart3,
+  Globe,
+  Plus,
+  Info
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { StatusIndicator } from '@/components/shared/status-indicator';
+import { Tabs } from '@/components/ui/tabs';
+import { Modal } from '@/components/ui/modal';
+import { useToast } from '@/components/providers/toast-provider';
+import { StatCard } from '@/components/shared/stat-card';
+import type { Exhibition } from '@/types/exhibition.types';
+
+interface ExhibitionStats {
+  ticketsSold: number;
+  totalRevenue: number;
+  totalScans: number;
+  admittedCount: number;
+  utilization: number;
+}
+
+export default function ExhibitionDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const { addToast } = useToast();
+  const id = params.id as string;
+
+  // State managers
+  const [exhibition, setExhibition] = React.useState<Exhibition | null>(null);
+  const [stats, setStats] = React.useState<ExhibitionStats | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [isStatsLoading, setIsStatsLoading] = React.useState(true);
+  const [isActionLoading, setIsActionLoading] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState('overview');
+
+  // Modal display toggles
+  const [showArchiveModal, setShowArchiveModal] = React.useState(false);
+
+  const fetchExhibitionDetails = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/exhibitions/${id}`);
+      if (!res.ok) throw new Error('Failed to load exhibition details');
+      
+      const body = await res.json();
+      if (body.success) {
+        setExhibition(body.data);
+      }
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Error loading details',
+        message: err.message || 'Check your network connection.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, addToast]);
+
+  const fetchStats = React.useCallback(async () => {
+    setIsStatsLoading(true);
+    try {
+      const res = await fetch(`/api/exhibitions/${id}/stats`);
+      if (!res.ok) throw new Error('Failed to load exhibition metrics');
+      
+      const body = await res.json();
+      if (body.success) {
+        setStats(body.data);
+      }
+    } catch (err) {
+      console.error('Stats load failure:', err);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }, [id]);
+
+  React.useEffect(() => {
+    if (id) {
+      fetchExhibitionDetails();
+      fetchStats();
+    }
+  }, [id, fetchExhibitionDetails, fetchStats]);
+
+  const handleStatusToggle = async () => {
+    if (!exhibition) return;
+    setIsActionLoading(true);
+
+    const isCurrentActive = exhibition.status === 'active';
+    const nextStatus = isCurrentActive ? 'paused' : 'active';
+
+    try {
+      const res = await fetch(`/api/exhibitions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error?.message || 'Failed to update status');
+
+      setExhibition(body.data);
+      addToast({
+        type: 'success',
+        title: 'Status updated',
+        message: `Exhibition is now ${nextStatus === 'active' ? 'Active' : 'Paused'}.`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Status update failed',
+        message: err.message || 'Please try again later.',
+      });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    setIsActionLoading(true);
+    try {
+      const res = await fetch(`/api/exhibitions/${id}`, {
+        method: 'DELETE',
+      });
+
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error?.message || 'Failed to archive exhibition');
+
+      addToast({
+        type: 'info',
+        title: 'Exhibition archived',
+        message: 'Exhibition successfully soft-deleted from active records.',
+      });
+      router.push('/admin/exhibitions');
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Archive failed',
+        message: err.message || 'Please try again later.',
+      });
+    } finally {
+      setIsActionLoading(false);
+      setShowArchiveModal(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center py-24">
+        <Spinner size="lg" className="text-accent-500" />
+      </div>
+    );
+  }
+
+  if (!exhibition) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center py-20 text-center">
+        <AlertTriangle size={48} className="text-warning mb-4" />
+        <h3 className="text-base font-bold text-gray-200">Exhibition Not Found</h3>
+        <p className="mt-1 text-sm text-gray-400 max-w-sm">
+          The requested exhibition document could not be found or has been completely removed.
+        </p>
+        <Link href="/admin/exhibitions" passHref>
+          <Button variant="secondary" className="mt-4 text-xs font-semibold">
+            Return to List
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  // Format Date timeframe
+  const formattedDates = () => {
+    const s = new Date(exhibition.startDate);
+    const e = new Date(exhibition.endDate);
+    const format = { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' } as const;
+    return `${s.toLocaleDateString('en-IN', format)} - ${e.toLocaleDateString('en-IN', { ...format, year: 'numeric' })}`;
+  };
+
+  const formattedRevenue = stats
+    ? new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 0,
+      }).format(stats.totalRevenue / 100)
+    : '₹0';
+
+  // Roster details
+  const staffRoster: any[] = (exhibition as any).assignedStaffIds || [];
+  const counterStaff = staffRoster.filter((st) => st.role === 'counter');
+  const gateStaff = staffRoster.filter((st) => st.role === 'gate');
+
+  const tabOptions = [
+    { id: 'overview', label: 'General Overview' },
+    { id: 'tickets', label: `Ticket Classes (${exhibition.ticketTypes.length})` },
+    { id: 'roster', label: `Assigned Roster (${staffRoster.length})` },
+  ];
+
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto flex flex-col flex-1">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-800 pb-5">
+        <div className="space-y-2">
+          <Link href="/admin/exhibitions" passHref>
+            <Button variant="secondary" className="h-8 px-2 flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200">
+              <ArrowLeft size={13} />
+              <span>Back to Workspace</span>
+            </Button>
+          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-50">{exhibition.name}</h1>
+            <StatusIndicator status={exhibition.status} />
+          </div>
+          <div className="flex items-center gap-1 text-xs font-semibold text-gray-400 select-none">
+            <Globe size={12} className="text-accent-400" />
+            <span className="uppercase">{exhibition.category} category</span>
+          </div>
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {exhibition.status !== 'archived' && (
+            <>
+              <Link href={`/admin/exhibitions/${id}/edit`} passHref>
+                <Button variant="secondary" className="text-xs font-semibold flex items-center gap-1.5 h-9">
+                  <Edit3 size={13} />
+                  <span>Edit Setup</span>
+                </Button>
+              </Link>
+              
+              <Button
+                variant="secondary"
+                onClick={handleStatusToggle}
+                isLoading={isActionLoading}
+                className="text-xs font-semibold flex items-center gap-1.5 h-9"
+              >
+                {exhibition.status === 'active' ? (
+                  <>
+                    <Pause size={13} className="text-warning-400" />
+                    <span>Pause Event</span>
+                  </>
+                ) : (
+                  <>
+                    <Play size={13} className="text-success-400" />
+                    <span>Activate Event</span>
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="danger"
+                onClick={() => setShowArchiveModal(true)}
+                className="text-xs font-semibold flex items-center gap-1.5 h-9 cursor-pointer"
+                disabled={isActionLoading}
+              >
+                <Trash size={13} />
+                <span>Archive</span>
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Aggregate Stats Dashboard */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="TICKETS SOLD"
+          value={stats?.ticketsSold ?? 0}
+          icon="Ticket"
+          isLoading={isStatsLoading}
+        />
+        <StatCard
+          title="GROSS REVENUE"
+          value={formattedRevenue}
+          icon="BarChart3"
+          isLoading={isStatsLoading}
+        />
+        <StatCard
+          title="VALIDATION SCANS"
+          value={stats?.totalScans ?? 0}
+          icon="Activity"
+          isLoading={isStatsLoading}
+        />
+        <StatCard
+          title="ADMITTED CAPACITY"
+          value={stats ? `${stats.admittedCount} / ${exhibition.capacity || '∞'}` : '0 / 0'}
+          icon="Users"
+          isLoading={isStatsLoading}
+        />
+      </div>
+
+      {/* Detail Workspace Tabs */}
+      <div className="flex flex-col flex-1 space-y-4">
+        <Tabs tabs={tabOptions} activeTab={activeTab} onChange={setActiveTab} />
+
+        <div className="flex-1">
+          {/* Tab 1: Overview Details */}
+          {activeTab === 'overview' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Left Column: Rules & Info */}
+              <div className="md:col-span-2 space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-bold text-gray-300 uppercase tracking-wider">Venue Description & Rules</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm text-gray-300">
+                    <div>
+                      <span className="font-semibold text-gray-400 block mb-1">Overview Description</span>
+                      <p className="leading-relaxed bg-gray-950/40 p-3 rounded-lg border border-gray-850">
+                        {exhibition.description || 'No description provided.'}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                      <div>
+                        <span className="font-semibold text-gray-400 block mb-1">Time Schedule</span>
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-200">
+                          <Calendar size={13} className="text-accent-400" />
+                          <span>{formattedDates()}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-400 block mb-1">Venue Hall & Address</span>
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-200">
+                          <MapPin size={13} className="text-accent-400" />
+                          <span>{exhibition.venue} {exhibition.address ? `(${exhibition.address})` : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {exhibition.notes && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm font-bold text-gray-300 uppercase tracking-wider">Internal Operating Notes</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-gray-400 leading-relaxed italic bg-gray-950/40 p-3 rounded-lg border border-gray-850">
+                        "{exhibition.notes}"
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Right Column: Settings configuration summaries */}
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-bold text-gray-300 uppercase tracking-wider">Operating Rules</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center text-sm border-b border-gray-850 pb-2">
+                      <span className="text-gray-400">Multi-Entry Tickets</span>
+                      <span className={`font-semibold ${exhibition.settings.allowMultiEntry ? 'text-success' : 'text-gray-500'}`}>
+                        {exhibition.settings.allowMultiEntry ? 'Allowed' : 'Disabled'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm border-b border-gray-850 pb-2">
+                      <span className="text-gray-400">Scans Limit Per Ticket</span>
+                      <span className="font-semibold text-gray-200">
+                        {exhibition.settings.maxScansPerTicket} scan(s) max
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm border-b border-gray-850 pb-2">
+                      <span className="text-gray-400">Primary Ticket Price</span>
+                      <span className="font-bold text-accent-300">
+                        ₹{exhibition.entryFee / 100}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-400">Attendee Cap</span>
+                      <span className="font-semibold text-gray-200">
+                        {exhibition.capacity ? `${exhibition.capacity} visitors` : 'Unlimited'}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Ticket Classes */}
+          {activeTab === 'tickets' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-bold text-gray-300 uppercase tracking-wider">Configured Ticket Classes</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-800 bg-gray-900/40 text-[10px] font-bold text-gray-400 uppercase tracking-wider select-none">
+                        <th className="p-4 pl-6">Class Name</th>
+                        <th className="p-4">Ticket Price (₹)</th>
+                        <th className="p-4 pr-6">Capacity Cap</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-y-gray-850">
+                      {exhibition.ticketTypes.map((t, idx) => (
+                        <tr key={idx} className="hover:bg-gray-900/10">
+                          <td className="p-4 pl-6 font-semibold text-gray-100">{t.name}</td>
+                          <td className="p-4 font-semibold text-accent-300">₹{t.price / 100}</td>
+                          <td className="p-4 pr-6 text-gray-400">{t.maxQuantity ? `${t.maxQuantity} tickets` : 'No Limit'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Tab 3: Assigned Staff Roster */}
+          {activeTab === 'roster' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Counter Staff Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center justify-between">
+                    <span>Counter Staff Assigned</span>
+                    <span className="text-[10px] text-gray-500 font-semibold px-2 py-0.5 rounded-full bg-gray-950 border border-gray-850">{counterStaff.length}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {counterStaff.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">No counter staff assigned to this exhibition.</p>
+                  ) : (
+                    <div className="divide-y divide-gray-850">
+                      {counterStaff.map((st) => (
+                        <div key={st.id} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between">
+                          <div>
+                            <span className="text-sm font-semibold text-gray-200 block">{st.name}</span>
+                            <span className="text-xs text-gray-500">ID: {st.staffId}</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-gray-400 bg-gray-850 border border-gray-800 rounded px-2 py-0.5 uppercase select-none">Counter</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Gate Staff Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center justify-between">
+                    <span>Gate Scanning Staff Assigned</span>
+                    <span className="text-[10px] text-gray-500 font-semibold px-2 py-0.5 rounded-full bg-gray-950 border border-gray-850">{gateStaff.length}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {gateStaff.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">No gate validation staff assigned to this exhibition.</p>
+                  ) : (
+                    <div className="divide-y divide-gray-850">
+                      {gateStaff.map((st) => (
+                        <div key={st.id} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between">
+                          <div>
+                            <span className="text-sm font-semibold text-gray-200 block">{st.name}</span>
+                            <span className="text-xs text-gray-500">ID: {st.staffId}</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-gray-400 bg-gray-850 border border-gray-800 rounded px-2 py-0.5 uppercase select-none">Gate Scan</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Confirmation Archive Modal */}
+      <Modal
+        open={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        title="Archive Exhibition"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 bg-error/5 border border-error/20 p-3 rounded-lg text-sm text-error">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <p>
+              <strong>Warning:</strong> Archiving this exhibition will deactivate it. Assigned staff will lose access to work under its scope, and it will be excluded from all ticketing operations. Historical metrics will be preserved.
+            </p>
+          </div>
+          <p className="text-sm text-gray-300">
+            Are you sure you want to archive <strong>{exhibition.name}</strong>?
+          </p>
+          <div className="flex justify-end gap-3 pt-3 border-t border-gray-800/40">
+            <Button
+              variant="secondary"
+              onClick={() => setShowArchiveModal(false)}
+              disabled={isActionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleArchive}
+              isLoading={isActionLoading}
+              className="font-semibold cursor-pointer"
+            >
+              Confirm Archive
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}

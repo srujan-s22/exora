@@ -1,26 +1,238 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ═══════════════════════════════════════════════════════════
+   ExhibitIQ Design System — Tailwind v4 Theme Configuration
+   ═══════════════════════════════════════════════════════════ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* ── Typography ── */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* ── Neutrals (Inverted for premium soft light theme) ── */
+  --color-gray-950: #f8f9fc; /* Soft off-white canvas */
+  --color-gray-900: #ffffff; /* White card surface */
+  --color-gray-850: #f1f3f7; /* Hover / elevated surface */
+  --color-gray-800: #e4e7eb; /* Borders / line dividers / inputs */
+  --color-gray-700: #d2d6dc; /* Medium borders */
+  --color-gray-650: #cbd5e1; /* Active input border */
+  --color-gray-600: #94a3b8; /* Muted icons / outline border */
+  --color-gray-500: #64748b; /* Muted text */
+  --color-gray-400: #475569; /* Secondary body text */
+  --color-gray-300: #334155; /* Regular text */
+  --color-gray-250: #2d3748; /* Highlight text */
+  --color-gray-200: #1e293b; /* Primary text */
+  --color-gray-100: #0f172a; /* Prominent heading */
+  --color-gray-5: #090d16;   /* Near black titles */
+  --color-gray-50: #020617;  /* Pure dark text labels */
+
+  /* ── Accent (Electric Indigo - adjusted for readable contrast) ── */
+  --color-accent-50: #f5f3ff;
+  --color-accent-100: #ede9fe;
+  --color-accent-200: #ddd6fe;
+  --color-accent-300: #4f46e5; /* Rich purple-indigo for high-contrast text links */
+  --color-accent-400: #4338ca; /* Active states */
+  --color-accent-500: #3730a3; /* Core buttons / dark background elements */
+  --color-accent-600: #2e2691;
+  --color-accent-700: #231c7a;
+
+  /* ── Semantic Colors (Adjusted for light theme accessibility) ── */
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-info: #2563eb;
+
+  /* ── Shadows (Refined soft depth for light surfaces) ── */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.04), 0 2px 4px -1px rgba(15, 23, 42, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.04), 0 4px 6px -2px rgba(15, 23, 42, 0.02);
+  --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.05);
+  --shadow-glow: 0 0 24px rgba(79, 70, 229, 0.05);
+
+  /* ── Border Radius ── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* ── Transitions ── */
+  --transition-fast: 150ms ease-out;
+  --transition-medium: 200ms ease-out;
+  --transition-slow: 300ms ease-out;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ═══════════════════════════════════════════════════════════
+   CSS Custom Properties
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* Surface tokens */
+  --surface-app: var(--color-gray-950);
+  --surface-card: var(--color-gray-900);
+  --surface-elevated: var(--color-gray-850);
+  --surface-input: var(--color-gray-900); /* White input background */
+  --surface-hover: var(--color-gray-850);
+
+  /* Border tokens */
+  --border-default: var(--color-gray-800);
+  --border-muted: var(--color-gray-800);
+
+  /* Text tokens */
+  --text-primary: var(--color-gray-200);
+  --text-secondary: var(--color-gray-300);
+  --text-tertiary: var(--color-gray-400);
+  --text-muted: var(--color-gray-500);
+
+  /* Semantic surface tokens */
+  --surface-success: rgba(22, 163, 74, 0.06);
+  --surface-warning: rgba(217, 119, 6, 0.06);
+  --surface-error: rgba(220, 38, 38, 0.06);
+  --surface-info: rgba(37, 99, 235, 0.06);
+  --surface-accent: rgba(79, 70, 229, 0.06);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Base Styles
+   ═══════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--surface-app);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+  min-height: 100dvh;
+}
+
+/* ── Focus Styles ── */
+:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+}
+
+/* ── Selection ── */
+::selection {
+  background-color: var(--color-accent-500);
+  color: white;
+}
+
+/* ── Scrollbar (Webkit) ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-gray-700);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-600);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Utility Classes
+   ═══════════════════════════════════════════════════════════ */
+
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-gray-800) 25%,
+    var(--color-gray-700) 50%,
+    var(--color-gray-800) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+/* Pulse for scan result feedback */
+@keyframes success-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+  70% { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+@keyframes error-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-success-pulse {
+  animation: success-pulse 0.6s ease-out;
+}
+
+.animate-error-shake {
+  animation: error-shake 0.5s ease-in-out;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   POS Thermal Printing Styles
+   ═══════════════════════════════════════════════════════════ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-receipt, #printable-receipt * {
+    visibility: visible;
+  }
+  #printable-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .page-break-after-always {
+    page-break-after: always;
+    break-after: page;
+  }
+}
+
+/* Custom laser scanning animation */
+@keyframes laser-sweep {
+  0% {
+    top: 6%;
+  }
+  50% {
+    top: 94%;
+  }
+  100% {
+    top: 6%;
+  }
+}
+
+.animate-laser {
+  animation: laser-sweep 2s ease-in-out infinite;
 }
