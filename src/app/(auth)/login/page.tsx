@@ -25,9 +25,26 @@ function LoginFormContent() {
   // If already logged in, redirect
   React.useEffect(() => {
     if (user) {
-      router.push(`/${user.role}`);
+      const path = user.role === 'super_admin' ? '/admin' : `/${user.role}`;
+      router.push(path);
     }
   }, [user, router]);
+
+  // If no super user exists, redirect to setup
+  React.useEffect(() => {
+    async function checkBootstrap() {
+      try {
+        const res = await fetch('/api/bootstrap/status', { cache: 'no-store' });
+        const body = await res.json();
+        if (body.success && body.data?.superUserExists === false) {
+          router.push('/setup');
+        }
+      } catch {
+        // Ignore
+      }
+    }
+    checkBootstrap();
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

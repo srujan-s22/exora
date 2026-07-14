@@ -29,7 +29,7 @@ const AuditLogSchema = new Schema<IAuditLog>(
     performedByRole: {
       type: String,
       required: true,
-      enum: ['admin', 'counter', 'gate'],
+      enum: ['super_admin', 'admin', 'counter', 'gate', 'ride'],
     },
     targetType: {
       type: String,

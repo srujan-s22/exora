@@ -2,8 +2,27 @@ import { User as UserModel } from '@/lib/db/models/user.model';
 import { connectToDatabase } from '@/lib/db/connection';
 import { comparePassword, signJwt } from '@/lib/utils/crypto';
 import { AuditService } from '@/lib/services/audit.service';
+import { SUPER_ADMIN_PERMISSIONS, DEFAULT_ADMIN_PERMISSIONS } from '@/lib/config/roles';
 import type { LoginCredentials, AuthUser } from '@/types/auth.types';
+import type { UserPermissionKey } from '@/lib/config/roles';
 import jwt from 'jsonwebtoken';
+
+/**
+ * Resolve the effective permissions for a user.
+ * Super admins always get all permissions regardless of stored values.
+ */
+function resolvePermissions(role: string, storedPermissions?: Record<string, boolean>): Record<UserPermissionKey, boolean> {
+  if (role === 'super_admin') {
+    return { ...SUPER_ADMIN_PERMISSIONS };
+  }
+  if (role === 'admin' && storedPermissions) {
+    return {
+      ...DEFAULT_ADMIN_PERMISSIONS,
+      ...storedPermissions,
+    } as Record<UserPermissionKey, boolean>;
+  }
+  return { ...DEFAULT_ADMIN_PERMISSIONS };
+}
 
 export const AuthService = {
   /**
@@ -43,7 +62,10 @@ export const AuthService = {
       throw new Error('Invalid Staff ID or password');
     }
 
-    // 4. Generate JWT
+    // 4. Resolve permissions
+    const permissions = resolvePermissions(userDoc.role, userDoc.permissions?.toObject?.() || userDoc.permissions);
+
+    // 5. Generate JWT
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       throw new Error('Server configuration error: JWT secret is missing.');
@@ -53,20 +75,20 @@ export const AuthService = {
       sub: userDoc._id.toString(),
       staffId: userDoc.staffId,
       role: userDoc.role,
-      isSuperAdmin: userDoc.isSuperAdmin || false,
+      permissions,
       exhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
     };
 
     const token = signJwt(payload, secret, '8h');
 
-    // 5. Update lastLoginAt, lastLoginIp
+    // 6. Update lastLoginAt, lastLoginIp
     userDoc.lastLoginAt = new Date();
     if (ipAddress) {
       userDoc.lastLoginIp = ipAddress;
     }
     await userDoc.save();
 
-    // 6. Create success audit log
+    // 7. Create success audit log
     await AuditService.create({
       action: 'user.login',
       performedBy: userDoc._id,
@@ -83,7 +105,7 @@ export const AuthService = {
       staffId: userDoc.staffId,
       name: userDoc.name,
       role: userDoc.role,
-      isSuperAdmin: userDoc.isSuperAdmin || false,
+      permissions,
       assignedExhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
       isActive: userDoc.isActive,
     };
@@ -113,12 +135,14 @@ export const AuthService = {
         return null;
       }
 
+      const permissions = resolvePermissions(userDoc.role, userDoc.permissions?.toObject?.() || userDoc.permissions);
+
       return {
         id: userDoc._id.toString(),
         staffId: userDoc.staffId,
         name: userDoc.name,
         role: userDoc.role,
-        isSuperAdmin: userDoc.isSuperAdmin || false,
+        permissions,
         assignedExhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
         isActive: userDoc.isActive,
       };
@@ -138,12 +162,14 @@ export const AuthService = {
       return null;
     }
 
+    const permissions = resolvePermissions(userDoc.role, userDoc.permissions?.toObject?.() || userDoc.permissions);
+
     return {
       id: userDoc._id.toString(),
       staffId: userDoc.staffId,
       name: userDoc.name,
       role: userDoc.role,
-      isSuperAdmin: userDoc.isSuperAdmin || false,
+      permissions,
       assignedExhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
       isActive: userDoc.isActive,
     };

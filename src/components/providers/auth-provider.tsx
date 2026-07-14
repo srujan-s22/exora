@@ -2,14 +2,17 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { AuthUser } from '@/types/auth.types';
+import type { UserPermissionKey } from '@/lib/config/roles';
 
 interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isSuperAdmin: boolean;
   login: (staffId: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  hasPermission: (permission: UserPermissionKey) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -78,15 +81,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Check if the current user has a specific permission.
+   * Super admins always return true.
+   */
+  const hasPermission = useCallback((permission: UserPermissionKey): boolean => {
+    if (!user) return false;
+    if (user.role === 'super_admin') return true;
+    return !!user.permissions?.[permission];
+  }, [user]);
+
+  const isSuperAdmin = user?.role === 'super_admin';
+
   return (
     <AuthContext.Provider
       value={{
         user,
         isLoading,
         isAuthenticated: !!user,
+        isSuperAdmin,
         login,
         logout,
         refreshUser,
+        hasPermission,
       }}
     >
       {children}

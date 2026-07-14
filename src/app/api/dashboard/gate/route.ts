@@ -26,7 +26,9 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
     }
 
-    if (user.role !== 'admin' && user.role !== 'gate') {
+    const isAdminOrSuper = user.role === 'admin' || user.role === 'super_admin';
+
+    if (!isAdminOrSuper && user.role !== 'gate') {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
@@ -42,10 +44,10 @@ export async function GET(req: NextRequest) {
 
     // 2. Fetch today's gate check-in statistics
     // Admin sees overall stats; gate staff sees their own shift stats
-    const statsUser = user.role !== 'admin' ? user.id : '';
+    const statsUser = !isAdminOrSuper ? user.id : '';
     // Let's modify getGateStats to accept empty statsUser for admin overall stats
     let stats;
-    if (user.role !== 'admin') {
+    if (!isAdminOrSuper) {
       stats = await TicketService.getGateStats(user.id, dateRange);
     } else {
       // For admin, calculate overall stats by summing all scans today
@@ -65,7 +67,7 @@ export async function GET(req: NextRequest) {
     const recentScansResult = await TicketService.listScans({
       page: 1,
       limit: 15,
-      scannedBy: user.role !== 'admin' ? user.id : undefined,
+      scannedBy: !isAdminOrSuper ? user.id : undefined,
       startDate: startOfToday,
       endDate: endOfToday,
     });

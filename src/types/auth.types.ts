@@ -1,9 +1,10 @@
-import type { UserRoleType } from '@/lib/config/roles';
+import type { UserRoleType, UserPermissionKey } from '@/lib/config/roles';
 
 export interface JwtPayload {
   sub: string;
   staffId: string;
   role: UserRoleType;
+  permissions: Record<UserPermissionKey, boolean>;
   exhibitions: string[];
   iat: number;
   exp: number;
@@ -19,7 +20,7 @@ export interface AuthUser {
   staffId: string;
   name: string;
   role: UserRoleType;
-  isSuperAdmin: boolean;
+  permissions: Record<UserPermissionKey, boolean>;
   assignedExhibitions: string[];
   isActive: boolean;
 }

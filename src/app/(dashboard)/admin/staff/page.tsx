@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import {
   Search, Plus, X, Filter, Users, Eye, UserPlus,
-  Shield, Mail, Lock, Building2, ChevronRight, Crown,
+  Shield, Mail, Lock, Building2, ChevronRight, Crown, Phone, KeyRound, ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,15 +15,18 @@ import { DataTable } from '@/components/ui/data-table';
 import { Pagination } from '@/components/ui/pagination';
 import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/providers/toast-provider';
+import { useAuth } from '@/components/providers/auth-provider';
 import type { Staff } from '@/types/staff.types';
 import type { Exhibition } from '@/types/exhibition.types';
-import type { PaginationMeta, ApiSuccessResponse } from '@/types/api.types';
+import type { PaginationMeta } from '@/types/api.types';
 import type { TableColumn, BadgeVariant } from '@/types/ui.types';
 
 const roleVariant: Record<string, BadgeVariant> = {
+  super_admin: 'warning',
   admin: 'accent',
   counter: 'info',
   gate: 'success',
+  ride: 'default',
 };
 
 function formatDate(d: string | Date): string {
@@ -38,6 +41,7 @@ function formatDate(d: string | Date): string {
 
 export default function StaffManagementPage() {
   const { addToast } = useToast();
+  const { user: currentUser, hasPermission, isSuperAdmin } = useAuth();
 
   // List state
   const [staff, setStaff] = React.useState<Staff[]>([]);
@@ -54,10 +58,21 @@ export default function StaffManagementPage() {
   const [showCreateModal, setShowCreateModal] = React.useState(false);
   const [exhibitions, setExhibitions] = React.useState<Exhibition[]>([]);
   const [createForm, setCreateForm] = React.useState({
-    name: '', email: '', role: 'counter', password: '', assignedExhibitions: [] as string[], superAdminSecret: '',
+    name: '', email: '', role: 'counter', password: '', phoneNumber: '', assignedExhibitions: [] as string[],
+    permissions: {
+      canCreateUsers: false,
+      canResetPasswords: false,
+      canViewAuditLogs: false,
+      canManageStaff: false,
+      canApproveResets: false,
+      canCreateAdmins: false,
+    }
   });
   const [createErrors, setCreateErrors] = React.useState<Record<string, string>>({});
   const [isCreating, setIsCreating] = React.useState(false);
+
+  // Password reset request state
+  const [isRequestingReset, setIsRequestingReset] = React.useState(false);
 
   // Debounced search
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
@@ -130,6 +145,11 @@ export default function StaffManagementPage() {
   const handleCreateStaff = async () => {
     const errors: Record<string, string> = {};
     if (!createForm.name.trim()) errors.name = 'Name is required';
+    if (!createForm.phoneNumber.trim()) {
+      errors.phoneNumber = 'Phone number is required';
+    } else if (!/^[6-9]\d{9}$/.test(createForm.phoneNumber.trim())) {
+      errors.phoneNumber = 'Must be a valid 10-digit Indian mobile number';
+    }
     if (!createForm.password) {
       errors.password = 'Password is required';
     } else if (createForm.password.length < 8) {
@@ -159,11 +179,12 @@ export default function StaffManagementPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: createForm.name.trim(),
+          phoneNumber: createForm.phoneNumber.trim(),
           email: createForm.email.trim() || undefined,
           role: createForm.role,
           password: createForm.password,
           assignedExhibitions: createForm.assignedExhibitions,
-          superAdminSecret: createForm.role === 'admin' ? createForm.superAdminSecret : undefined,
+          permissions: createForm.role === 'admin' ? createForm.permissions : undefined,
         }),
       });
 
@@ -179,13 +200,70 @@ export default function StaffManagementPage() {
       });
 
       setShowCreateModal(false);
-      setCreateForm({ name: '', email: '', role: 'counter', password: '', assignedExhibitions: [], superAdminSecret: '' });
+      setCreateForm({
+        name: '', email: '', role: 'counter', password: '', phoneNumber: '', assignedExhibitions: [],
+        permissions: {
+          canCreateUsers: false,
+          canResetPasswords: false,
+          canViewAuditLogs: false,
+          canManageStaff: false,
+          canApproveResets: false,
+          canCreateAdmins: false,
+        }
+      });
       fetchStaff();
     } catch (err: any) {
       addToast({ type: 'error', title: 'Creation failed', message: err.message });
     } finally {
       setIsCreating(false);
     }
+  };
+
+  // Quick Password Reset Request handler
+  const handleRequestReset = async (phoneNumber: string) => {
+    setIsRequestingReset(true);
+    try {
+      const res = await fetch('/api/password-resets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPhoneNumber: phoneNumber }),
+      });
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        throw new Error(body.error?.message || 'Failed to submit reset request');
+      }
+      addToast({
+        type: 'success',
+        title: 'Reset request submitted',
+        message: 'Awaiting super admin approval.',
+      });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Request failed', message: err.message });
+    } finally {
+      setIsRequestingReset(false);
+    }
+  };
+
+  // Determine allowed roles to create
+  const getAllowedRoles = () => {
+    if (isSuperAdmin) {
+      return [
+        { label: 'Super Admin', value: 'super_admin' },
+        { label: 'Admin', value: 'admin' },
+        { label: 'Counter Staff', value: 'counter' },
+        { label: 'Gate Staff', value: 'gate' },
+        { label: 'Ride Staff', value: 'ride' },
+      ];
+    }
+    const roles = [
+      { label: 'Counter Staff', value: 'counter' },
+      { label: 'Gate Staff', value: 'gate' },
+      { label: 'Ride Staff', value: 'ride' },
+    ];
+    if (hasPermission('canCreateAdmins')) {
+      roles.push({ label: 'Admin', value: 'admin' });
+    }
+    return roles;
   };
 
   // Table columns
@@ -196,7 +274,7 @@ export default function StaffManagementPage() {
       render: (_val, row) => (
         <Link
           href={`/admin/staff/${row.id}`}
-          className="font-mono text-accent-400 hover:text-accent-300 transition-colors font-semibold text-xs tracking-wide"
+          className="font-mono text-accent-300 hover:text-accent-400 transition-colors font-semibold text-xs tracking-wide"
         >
           {row.staffId}
         </Link>
@@ -213,12 +291,13 @@ export default function StaffManagementPage() {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <p className="text-sm text-gray-200 font-medium truncate">{row.name}</p>
-              {row.isSuperAdmin && (
+              {row.role === 'super_admin' && (
                 <span title="Super Admin">
                   <Crown size={12} className="text-amber-400 shrink-0" />
                 </span>
               )}
             </div>
+            {row.phoneNumber && <p className="text-[10px] text-gray-400 font-mono">{row.phoneNumber}</p>}
             {row.email && <p className="text-[10px] text-gray-500 truncate">{row.email}</p>}
           </div>
         </div>
@@ -230,7 +309,7 @@ export default function StaffManagementPage() {
       render: (_val, row) => (
         <Badge variant={roleVariant[row.role] || 'default'}>
           <Shield size={10} className="mr-1" />
-          {row.role.charAt(0).toUpperCase() + row.role.slice(1)}
+          {row.role === 'super_admin' ? 'Super Admin' : row.role.charAt(0).toUpperCase() + row.role.slice(1)}
         </Badge>
       ),
     },
@@ -271,15 +350,36 @@ export default function StaffManagementPage() {
     {
       key: 'actions',
       label: '',
-      className: 'w-10',
+      className: 'w-24',
       render: (_val, row) => (
-        <Link
-          href={`/admin/staff/${row.id}`}
-          className="inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-400 hover:text-accent-400 hover:bg-gray-800 transition-colors"
-          title="View staff details"
-        >
-          <Eye size={15} />
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            href={`/admin/staff/${row.id}`}
+            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-400 hover:text-accent-400 hover:bg-gray-800 transition-colors"
+            title="View details"
+          >
+            <Eye size={15} />
+          </Link>
+          {isSuperAdmin && row.role === 'admin' && (
+            <Link
+              href={`/admin/staff/${row.id}/permissions`}
+              className="inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-400 hover:text-amber-400 hover:bg-gray-800 transition-colors"
+              title="Manage Permissions"
+            >
+              <ShieldAlert size={15} />
+            </Link>
+          )}
+          {hasPermission('canResetPasswords') && row.role !== 'super_admin' && (
+            <button
+              onClick={() => handleRequestReset(row.phoneNumber)}
+              className="inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-400 hover:text-error hover:bg-gray-800 transition-colors cursor-pointer"
+              title="Request Password Reset"
+              disabled={isRequestingReset}
+            >
+              <KeyRound size={15} />
+            </button>
+          )}
+        </div>
       ),
     },
   ];
@@ -287,9 +387,11 @@ export default function StaffManagementPage() {
   // Filter options
   const roleOptions = [
     { label: 'All Roles', value: '' },
+    { label: 'Super Admin', value: 'super_admin' },
     { label: 'Admin', value: 'admin' },
     { label: 'Counter', value: 'counter' },
     { label: 'Gate', value: 'gate' },
+    { label: 'Ride', value: 'ride' },
   ];
   const statusOptions = [
     { label: 'All Statuses', value: '' },
@@ -297,6 +399,8 @@ export default function StaffManagementPage() {
     { label: 'Inactive', value: 'inactive' },
   ];
   const exhibitionOptions = exhibitions.map((e) => ({ label: e.name, value: e.id }));
+
+  const canCreateStaff = isSuperAdmin || hasPermission('canCreateUsers');
 
   return (
     <>
@@ -306,16 +410,18 @@ export default function StaffManagementPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-50">Staff Management</h1>
             <p className="mt-1 text-sm text-gray-400">
-              Create, manage, and assign counter and gate staff members.
+              Create, manage, and assign operations staff members.
             </p>
           </div>
-          <Button
-            className="shrink-0 flex items-center gap-1.5 font-semibold"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <UserPlus size={16} />
-            <span>Add Staff Member</span>
-          </Button>
+          {canCreateStaff && (
+            <Button
+              className="shrink-0 flex items-center gap-1.5 font-semibold"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <UserPlus size={16} />
+              <span>Add Staff Member</span>
+            </Button>
+          )}
         </div>
 
         {/* Filters */}
@@ -327,7 +433,7 @@ export default function StaffManagementPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Input
-              placeholder="Search by name or staff ID..."
+              placeholder="Search by name, ID or phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               leftIcon={<Search size={16} />}
@@ -394,12 +500,12 @@ export default function StaffManagementPage() {
               <Button variant="secondary" onClick={handleClearFilters} className="mt-4 text-xs font-semibold">
                 Reset Search Filters
               </Button>
-            ) : (
+            ) : canCreateStaff ? (
               <Button onClick={() => setShowCreateModal(true)} className="mt-4 text-xs font-semibold">
                 <UserPlus size={14} className="mr-1.5" />
                 Add Staff Member
               </Button>
-            )}
+            ) : null}
           </div>
         ) : (
           <div className="space-y-4 flex-1 flex flex-col justify-between">
@@ -436,6 +542,15 @@ export default function StaffManagementPage() {
           />
 
           <Input
+            label="Phone Number"
+            placeholder="10-digit mobile number"
+            value={createForm.phoneNumber}
+            onChange={(e) => setCreateForm((p) => ({ ...p, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+            error={createErrors.phoneNumber}
+            leftIcon={<Phone size={14} />}
+          />
+
+          <Input
             label="Email (Optional)"
             placeholder="staff@example.com"
             type="email"
@@ -449,23 +564,77 @@ export default function StaffManagementPage() {
             label="Role"
             value={createForm.role}
             onChange={(e) => setCreateForm((p) => ({ ...p, role: e.target.value }))}
-            options={[
-              { label: 'Counter Staff', value: 'counter' },
-              { label: 'Gate Staff', value: 'gate' },
-              { label: 'Admin', value: 'admin' },
-            ]}
+            options={getAllowedRoles()}
           />
 
           {createForm.role === 'admin' && (
-            <Input
-              label="Super Admin Activation Secret (Optional)"
-              placeholder="Enter secret to activate Super Admin privilege"
-              type="password"
-              value={createForm.superAdminSecret}
-              onChange={(e) => setCreateForm((p) => ({ ...p, superAdminSecret: e.target.value }))}
-              leftIcon={<Lock size={14} />}
-              helperText="Provides full permission to edit or delete/deactivate other admins without their password."
-            />
+            <div className="space-y-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                Admin Permissions
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createForm.permissions.canCreateUsers}
+                    onChange={(e) => setCreateForm((p) => ({
+                      ...p,
+                      permissions: { ...p.permissions, canCreateUsers: e.target.checked }
+                    }))}
+                    className="rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20"
+                  />
+                  <span>Create Users</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createForm.permissions.canCreateAdmins}
+                    onChange={(e) => setCreateForm((p) => ({
+                      ...p,
+                      permissions: { ...p.permissions, canCreateAdmins: e.target.checked }
+                    }))}
+                    className="rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20"
+                  />
+                  <span>Create Admins</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createForm.permissions.canManageStaff}
+                    onChange={(e) => setCreateForm((p) => ({
+                      ...p,
+                      permissions: { ...p.permissions, canManageStaff: e.target.checked }
+                    }))}
+                    className="rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20"
+                  />
+                  <span>Manage Staff</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createForm.permissions.canResetPasswords}
+                    onChange={(e) => setCreateForm((p) => ({
+                      ...p,
+                      permissions: { ...p.permissions, canResetPasswords: e.target.checked }
+                    }))}
+                    className="rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20"
+                  />
+                  <span>Request Resets</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createForm.permissions.canViewAuditLogs}
+                    onChange={(e) => setCreateForm((p) => ({
+                      ...p,
+                      permissions: { ...p.permissions, canViewAuditLogs: e.target.checked }
+                    }))}
+                    className="rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20"
+                  />
+                  <span>View Audit Logs</span>
+                </label>
+              </div>
+            </div>
           )}
 
           <Input
@@ -499,8 +668,8 @@ export default function StaffManagementPage() {
                         setCreateForm((p) => ({
                           ...p,
                           assignedExhibitions: e.target.checked
-                            ? [...p.assignedExhibitions, exh.value]
-                            : p.assignedExhibitions.filter((id) => id !== exh.value),
+                             ? [...p.assignedExhibitions, exh.value]
+                             : p.assignedExhibitions.filter((id) => id !== exh.value),
                         }));
                       }}
                       className="h-4 w-4 rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20 focus:ring-offset-gray-950 focus:ring-2 cursor-pointer transition-all checked:bg-accent-500 checked:border-transparent"

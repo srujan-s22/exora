@@ -12,7 +12,7 @@ import { Separator } from '../ui/separator';
 export function MobileNav() {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   if (!user) return null;
 
@@ -43,43 +43,54 @@ export function MobileNav() {
       <Drawer open={open} onClose={() => setOpen(false)} placement="left" title="Menu" size="sm">
         <div className="flex flex-col h-full justify-between">
           <div className="space-y-6">
-            {sections.map((section, idx) => (
-              <div key={idx} className="space-y-2">
-                {section.title && (
-                  <h4 className="px-3 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">
-                    {section.title}
-                  </h4>
-                )}
-                <ul className="space-y-1">
-                  {section.items.map((item) => {
-                    const isActive = pathname === item.href;
-                    const IconComponent = (Icons as any)[item.icon] || Icons.HelpCircle;
+            {sections.map((section, idx) => {
+              const filteredItems = section.items.filter((item) => {
+                if (item.requirePermission) {
+                  return hasPermission(item.requirePermission);
+                }
+                return true;
+              });
 
-                    return (
-                      <li key={item.href}>
-                        <Link
-                          href={item.href}
-                          onClick={() => setOpen(false)}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors select-none
-                            ${
-                              isActive
-                                ? 'bg-accent-500/10 text-accent-300 border-l-2 border-accent-500'
-                                : 'text-gray-400 hover:bg-gray-850 hover:text-gray-100 border-l-2 border-transparent'
-                            }
-                          `}
-                        >
-                          <IconComponent
-                            size={16}
-                            className={isActive ? 'text-accent-400' : 'text-gray-500'}
-                          />
-                          <span>{item.label}</span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
+              if (filteredItems.length === 0) return null;
+
+              return (
+                <div key={idx} className="space-y-2">
+                  {section.title && (
+                    <h4 className="px-3 text-[10px] font-semibold text-gray-500 uppercase tracking-widest">
+                      {section.title}
+                    </h4>
+                  )}
+                  <ul className="space-y-1">
+                    {filteredItems.map((item) => {
+                      const isActive = pathname === item.href;
+                      const IconComponent = (Icons as any)[item.icon] || Icons.HelpCircle;
+
+                      return (
+                        <li key={item.href}>
+                          <Link
+                            href={item.href}
+                            onClick={() => setOpen(false)}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors select-none
+                              ${
+                                isActive
+                                  ? 'bg-accent-500/10 text-accent-300 border-l-2 border-accent-500'
+                                  : 'text-gray-400 hover:bg-gray-850 hover:text-gray-100 border-l-2 border-transparent'
+                              }
+                            `}
+                          >
+                            <IconComponent
+                              size={16}
+                              className={isActive ? 'text-accent-400' : 'text-gray-500'}
+                            />
+                            <span>{item.label}</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
           </div>
 
           <div className="pt-4 border-t border-gray-800/40 mt-6">

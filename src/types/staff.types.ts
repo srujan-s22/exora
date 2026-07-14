@@ -1,12 +1,13 @@
-import type { UserRoleType } from '@/lib/config/roles';
+import type { UserRoleType, UserPermissionKey } from '@/lib/config/roles';
 
 export interface Staff {
   id: string;
   staffId: string;
   name: string;
+  phoneNumber: string;
   email?: string;
   role: UserRoleType;
-  isSuperAdmin?: boolean;
+  permissions?: Record<UserPermissionKey, boolean>;
   assignedExhibitions: string[];
   isActive: boolean;
   lastLoginAt?: Date;
@@ -18,17 +19,21 @@ export interface Staff {
 
 export interface CreateStaffInput {
   name: string;
+  phoneNumber: string;
   email?: string;
   role: UserRoleType;
   password: string;
+  permissions?: Partial<Record<UserPermissionKey, boolean>>;
   assignedExhibitions?: string[];
 }
 
 export interface UpdateStaffInput {
   name?: string;
+  phoneNumber?: string;
   email?: string;
   role?: UserRoleType;
   password?: string;
+  permissions?: Partial<Record<UserPermissionKey, boolean>>;
   assignedExhibitions?: string[];
   isActive?: boolean;
 }

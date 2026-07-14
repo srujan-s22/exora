@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Shield, Mail, Calendar, Clock, User, Building2,
   Wifi, UserX, UserCheck, Key, Pencil, Save, X, AlertTriangle,
-  Activity, Globe, Crown, Lock,
+  Activity, Globe, Crown, Lock, Phone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import { Modal } from '@/components/ui/modal';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/providers/toast-provider';
+import { useAuth } from '@/components/providers/auth-provider';
 import type { Staff } from '@/types/staff.types';
 import type { BadgeVariant } from '@/types/ui.types';
 
@@ -23,7 +24,7 @@ interface StaffDetail extends Omit<Staff, 'createdBy'> {
   recentActivity?: AuditLogEntry[];
   createdBy?: { name: string; staffId: string } | string;
   lastLoginIp?: string;
-  _currentUserIsSuperAdmin?: boolean;
+  _currentUserRole?: string;
   _isCurrentUser?: boolean;
 }
 
@@ -36,9 +37,11 @@ interface AuditLogEntry {
 }
 
 const roleVariant: Record<string, BadgeVariant> = {
+  super_admin: 'warning',
   admin: 'accent',
   counter: 'info',
   gate: 'success',
+  ride: 'default',
 };
 
 function formatDate(d: string | Date): string {
@@ -62,6 +65,7 @@ export default function StaffDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { addToast } = useToast();
+  const { isSuperAdmin, hasPermission } = useAuth();
 
   const [staff, setStaff] = React.useState<StaffDetail | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -69,7 +73,7 @@ export default function StaffDetailPage() {
   // Edit state
   const [isEditing, setIsEditing] = React.useState(false);
   const [editForm, setEditForm] = React.useState({
-    name: '', email: '', role: '', password: '', assignedExhibitions: [] as string[],
+    name: '', email: '', role: '', password: '', phoneNumber: '', assignedExhibitions: [] as string[],
   });
   const [editErrors, setEditErrors] = React.useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = React.useState(false);
@@ -127,6 +131,7 @@ export default function StaffDetailPage() {
       name: staff.name,
       email: staff.email || '',
       role: staff.role,
+      phoneNumber: staff.phoneNumber || '',
       password: '',
       assignedExhibitions: (staff.assignedExhibitions as any[]).map((e: any) =>
         typeof e === 'string' ? e : e.id || e._id?.toString()
@@ -140,6 +145,11 @@ export default function StaffDetailPage() {
   const handleSaveEdit = async () => {
     const errors: Record<string, string> = {};
     if (!editForm.name.trim()) errors.name = 'Name is required';
+    if (!editForm.phoneNumber.trim()) {
+      errors.phoneNumber = 'Phone number is required';
+    } else if (!/^[6-9]\d{9}$/.test(editForm.phoneNumber.trim())) {
+      errors.phoneNumber = 'Must be a valid 10-digit Indian mobile number';
+    }
     if (editForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email)) {
       errors.email = 'Invalid email address';
     }
@@ -161,6 +171,7 @@ export default function StaffDetailPage() {
     try {
       const payload: Record<string, any> = {
         name: editForm.name.trim(),
+        phoneNumber: editForm.phoneNumber.trim(),
         email: editForm.email.trim() || '',
         role: editForm.role,
         assignedExhibitions: editForm.assignedExhibitions,
@@ -252,7 +263,13 @@ export default function StaffDetailPage() {
 
   const createdBy = staff.createdBy as any;
   const assignedExhibitions = (staff.assignedExhibitions || []) as any[];
-  const canModify = !(staff.role === 'admin' && !staff._isCurrentUser && !staff._currentUserIsSuperAdmin);
+
+  // Access check:
+  // Only super_admin or users with canManageStaff permission can modify.
+  // Standard admins cannot modify other admins/super_admins.
+  const hasManagePermission = isSuperAdmin || hasPermission('canManageStaff');
+  const isPeerAdminOrSuper = (staff.role === 'admin' || staff.role === 'super_admin') && !staff._isCurrentUser;
+  const canModify = hasManagePermission && (!isPeerAdminOrSuper || isSuperAdmin);
 
   return (
     <>
@@ -277,7 +294,7 @@ export default function StaffDetailPage() {
             <div>
               <div className="flex items-center gap-2.5">
                 <h1 className="text-xl font-bold tracking-tight text-gray-50">{staff.name}</h1>
-                {staff.isSuperAdmin && (
+                {staff.role === 'super_admin' && (
                   <Badge variant="accent" className="flex items-center gap-1.5 py-0.5">
                     <Crown size={11} className="text-amber-400" />
                     <span>Super Admin</span>
@@ -285,7 +302,7 @@ export default function StaffDetailPage() {
                 )}
                 <Badge variant={roleVariant[staff.role] || 'default'}>
                   <Shield size={10} className="mr-1" />
-                  {staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}
+                  {staff.role === 'super_admin' ? 'Super Admin' : staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}
                 </Badge>
                 <div className="flex items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full ${staff.isActive ? 'bg-emerald-500' : 'bg-gray-600'}`} />
@@ -330,7 +347,7 @@ export default function StaffDetailPage() {
           </div>
         </div>
 
-        {!canModify && (
+        {!canModify && hasManagePermission && isPeerAdminOrSuper && (
           <div className="rounded-lg bg-warning/5 border border-warning/20 p-4 flex items-center gap-3 select-none">
             <AlertTriangle size={20} className="text-warning shrink-0" />
             <div>
@@ -362,6 +379,13 @@ export default function StaffDetailPage() {
                     error={editErrors.name}
                   />
                   <Input
+                    label="Phone Number"
+                    value={editForm.phoneNumber}
+                    onChange={(e) => setEditForm((p) => ({ ...p, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                    error={editErrors.phoneNumber}
+                    leftIcon={<Phone size={14} />}
+                  />
+                  <Input
                     label="Email"
                     type="email"
                     value={editForm.email}
@@ -369,16 +393,20 @@ export default function StaffDetailPage() {
                     error={editErrors.email}
                     leftIcon={<Mail size={14} />}
                   />
-                  <Select
-                    label="Role"
-                    value={editForm.role}
-                    onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}
-                    options={[
-                      { label: 'Admin', value: 'admin' },
-                      { label: 'Counter', value: 'counter' },
-                      { label: 'Gate', value: 'gate' },
-                    ]}
-                  />
+                  {isSuperAdmin && (
+                    <Select
+                      label="Role"
+                      value={editForm.role}
+                      onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}
+                      options={[
+                        { label: 'Super Admin', value: 'super_admin' },
+                        { label: 'Admin', value: 'admin' },
+                        { label: 'Counter', value: 'counter' },
+                        { label: 'Gate', value: 'gate' },
+                        { label: 'Ride', value: 'ride' },
+                      ]}
+                    />
+                  )}
                   <Input
                     label="New Password (leave blank to keep current)"
                     type="password"
@@ -393,8 +421,13 @@ export default function StaffDetailPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <DetailItem label="Full Name" value={staff.name} />
                   <DetailItem label="Staff ID" value={staff.staffId} mono />
+                  <DetailItem label="Phone Number" value={staff.phoneNumber || '—'} icon={<Phone size={12} />} mono />
                   <DetailItem label="Email" value={staff.email || '—'} icon={<Mail size={12} />} />
-                  <DetailItem label="Role" value={staff.role.charAt(0).toUpperCase() + staff.role.slice(1)} icon={<Shield size={12} />} />
+                  <DetailItem
+                    label="Role"
+                    value={staff.role === 'super_admin' ? 'Super Admin' : staff.role.charAt(0).toUpperCase() + staff.role.slice(1)}
+                    icon={<Shield size={12} />}
+                  />
                 </div>
               )}
             </CardContent>

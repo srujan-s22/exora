@@ -9,14 +9,14 @@ import { connectToDatabase } from '@/lib/db/connection';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { updateStaffSchema } from '@/lib/validators/staff.schema';
-import { hashPassword, comparePassword } from '@/lib/utils/crypto';
+import { hashPassword } from '@/lib/utils/crypto';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 /**
  * GET /api/staff/:id
- * Retrieve a single staff member by ID. Admin only.
+ * Retrieve a single staff member by ID. Super admin and admin only.
  */
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
     const currentUser = await AuthService.verifyToken(token);
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     }
 
     const staff = await UserModel.findById(id)
-      .select('name staffId email role isSuperAdmin isActive assignedExhibitions lastLoginAt lastLoginIp createdBy createdAt updatedAt')
+      .select('name staffId phoneNumber email role permissions isActive assignedExhibitions lastLoginAt lastLoginIp createdBy createdAt updatedAt')
       .populate('assignedExhibitions', 'name status')
       .populate('createdBy', 'name staffId');
 
@@ -50,13 +50,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
     // Fetch recent audit logs for this user
     const auditLogs = await AuditService.getByEntity('user', id);
 
-    // Also determine if current user is super admin
-    const currentUserDoc = await UserModel.findById(currentUser.id).select('isSuperAdmin');
-
     return successResponse({
       ...staff.toJSON(),
       recentActivity: auditLogs.slice(0, 20),
-      _currentUserIsSuperAdmin: currentUserDoc?.isSuperAdmin || false,
+      _currentUserRole: currentUser.role,
       _isCurrentUser: currentUser.id === id,
     });
   } catch (error: any) {
@@ -67,7 +64,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
 /**
  * PATCH /api/staff/:id
- * Update a staff member. Admin only.
+ * Update a staff member. Super admin and admin only.
  */
 export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
@@ -79,7 +76,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
     const currentUser = await AuthService.verifyToken(token);
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
@@ -107,12 +104,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     // ── Admin-to-admin protection ──
-    // Standard admins cannot modify another admin's account under any circumstance.
-    // Only a Super Admin can edit another admin.
-    const currentUserDoc = await UserModel.findById(currentUser.id).select('isSuperAdmin');
-    const isSuperAdmin = currentUserDoc?.isSuperAdmin || false;
+    // Only Super Admin can modify another admin or super_admin account.
+    const isSuperAdmin = currentUser.role === 'super_admin';
 
-    if (staff.role === 'admin' && currentUser.id !== id && !isSuperAdmin) {
+    if ((staff.role === 'admin' || staff.role === 'super_admin') && currentUser.id !== id && !isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Only a Super Admin can modify another admin profile.', 403);
     }
 
@@ -123,6 +118,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (updates.name !== undefined && updates.name !== staff.name) {
       changes.name = { from: staff.name, to: updates.name };
       staff.name = updates.name;
+    }
+
+    if (updates.phoneNumber !== undefined && updates.phoneNumber !== staff.phoneNumber) {
+      changes.phoneNumber = { from: staff.phoneNumber, to: updates.phoneNumber };
+      staff.phoneNumber = updates.phoneNumber;
     }
 
     if (updates.email !== undefined) {
@@ -144,6 +144,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     if (updates.role !== undefined && updates.role !== staff.role) {
+      // Only super admin can change roles
+      if (!isSuperAdmin) {
+        return errorResponse('FORBIDDEN', 'Only a Super Admin can change user roles.', 403);
+      }
       changes.role = { from: staff.role, to: updates.role };
       staff.role = updates.role;
     }
@@ -167,6 +171,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (updates.password) {
       staff.passwordHash = await hashPassword(updates.password);
+      staff.passwordUpdatedAt = new Date();
       changes.password = { from: '***', to: '***' };
     }
 
@@ -175,7 +180,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     // Determine the audit action
     let auditAction: string = 'user.update';
     if (changes.isActive) {
-      auditAction = changes.isActive.to ? 'user.update' : 'user.deactivate';
+      auditAction = changes.isActive.to ? 'user.activate' : 'user.deactivate';
     }
     if (changes.password) {
       auditAction = 'user.password_change';
@@ -192,7 +197,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     // Return updated staff
     const updated = await UserModel.findById(id)
-      .select('name staffId email role isSuperAdmin isActive assignedExhibitions lastLoginAt createdBy createdAt updatedAt')
+      .select('name staffId phoneNumber email role permissions isActive assignedExhibitions lastLoginAt createdBy createdAt updatedAt')
       .populate('assignedExhibitions', 'name status')
       .populate('createdBy', 'name staffId');
 
@@ -208,7 +213,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
 /**
  * DELETE /api/staff/:id
- * Soft-delete (deactivate) a staff member. Admin only.
+ * Soft-delete (deactivate) a staff member. Super admin and admin only.
  */
 export async function DELETE(req: NextRequest, context: RouteContext) {
   try {
@@ -220,7 +225,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
     const currentUser = await AuthService.verifyToken(token);
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
@@ -235,7 +240,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       return errorResponse('FORBIDDEN', 'You cannot deactivate your own account', 403);
     }
 
-    const staff = await UserModel.findById(id).select('+passwordHash');
+    const staff = await UserModel.findById(id);
     if (!staff) {
       return errorResponse('NOT_FOUND', 'Staff member not found', 404);
     }
@@ -245,12 +250,9 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     }
 
     // ── Admin-to-admin protection ──
-    // Standard admins cannot deactivate another admin's account under any circumstance.
-    // Only a Super Admin can deactivate another admin.
-    const currentUserDoc = await UserModel.findById(currentUser.id).select('isSuperAdmin');
-    const isSuperAdmin = currentUserDoc?.isSuperAdmin || false;
+    const isSuperAdmin = currentUser.role === 'super_admin';
 
-    if (staff.role === 'admin' && !isSuperAdmin) {
+    if ((staff.role === 'admin' || staff.role === 'super_admin') && !isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Only a Super Admin can deactivate another admin profile.', 403);
     }
 

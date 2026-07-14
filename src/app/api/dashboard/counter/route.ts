@@ -26,7 +26,9 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
     }
 
-    if (user.role !== 'admin' && user.role !== 'counter') {
+    const isAdminOrSuper = user.role === 'admin' || user.role === 'super_admin';
+
+    if (!isAdminOrSuper && user.role !== 'counter') {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Fetch today's shift statistics
     let stats;
-    if (user.role !== 'admin') {
+    if (!isAdminOrSuper) {
       stats = await SaleService.getStaffSalesStats(user.id, dateRange);
     } else {
       stats = await SaleService.getStats(undefined, dateRange);
@@ -52,7 +54,7 @@ export async function GET(req: NextRequest) {
     const recentSalesResult = await SaleService.list({
       page: 1,
       limit: 10,
-      soldBy: user.role !== 'admin' ? user.id : undefined,
+      soldBy: !isAdminOrSuper ? user.id : undefined,
       startDate: startOfToday,
       endDate: endOfToday,
     });

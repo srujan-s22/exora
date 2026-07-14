@@ -12,7 +12,8 @@ export default function HomePage() {
   useEffect(() => {
     if (!isLoading) {
       if (user) {
-        router.push(`/${user.role}`);
+        const path = user.role === 'super_admin' ? '/admin' : `/${user.role}`;
+        router.push(path);
       } else {
         router.push('/login');
       }

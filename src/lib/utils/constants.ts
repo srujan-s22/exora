@@ -21,9 +21,11 @@ export const MAX_SCANS_PER_TICKET = 1;
 
 // ── Staff ID Prefixes ──
 export const STAFF_ID_PREFIXES = {
+  super_admin: 'SUA',
   admin: 'ADM',
   counter: 'CTR',
   gate: 'GTE',
+  ride: 'RDE',
 } as const;
 
 // ── Exhibition Statuses ──
@@ -57,7 +59,10 @@ export const AUDIT_ACTIONS = [
   'user.create',
   'user.update',
   'user.deactivate',
+  'user.activate',
   'user.password_change',
+  'user.bootstrap_created',
+  'user.permissions_changed',
   'exhibition.create',
   'exhibition.update',
   'exhibition.status_change',
@@ -67,9 +72,13 @@ export const AUDIT_ACTIONS = [
   'ticket.scan_rejected',
   'sale.create',
   'settings.update',
+  'password_reset.requested',
+  'password_reset.approved',
+  'password_reset.rejected',
+  'password_reset.completed',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 // ── Audit Target Types ──
-export const AUDIT_TARGET_TYPES = ['user', 'exhibition', 'ticket', 'sale', 'settings'] as const;
+export const AUDIT_TARGET_TYPES = ['user', 'exhibition', 'ticket', 'sale', 'settings', 'password_reset'] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];

@@ -41,10 +41,10 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
  * Duplicated here because edge middleware cannot import non-edge-compatible modules.
  */
 const ROUTE_ROLE_MAP: Record<string, string[]> = {
-  '/admin': ['admin'],
-  '/counter': ['admin', 'counter'],
-  '/gate': ['admin', 'gate'],
-  '/ride': ['admin', 'gate'],
+  '/admin': ['super_admin', 'admin'],
+  '/counter': ['super_admin', 'admin', 'counter'],
+  '/gate': ['super_admin', 'admin', 'gate'],
+  '/ride': ['super_admin', 'admin', 'gate', 'ride'],
 };
 
 /**
@@ -74,6 +74,15 @@ function decodeJwtPayload(token: string): { sub: string; staffId: string; role: 
 }
 
 /**
+ * Get the correct dashboard path for a given role.
+ * super_admin users use the /admin dashboard.
+ */
+function getDashboardPath(role: string): string {
+  if (role === 'super_admin') return '/admin';
+  return `/${role}`;
+}
+
+/**
  * Next.js Edge Middleware.
  * Handles authentication and role-based route protection.
  */
@@ -85,12 +94,12 @@ export function proxy(request: NextRequest) {
   if (token && pathname === '/login') {
     const payload = decodeJwtPayload(token);
     if (payload) {
-      return NextResponse.redirect(new URL(`/${payload.role}`, request.url));
+      return NextResponse.redirect(new URL(getDashboardPath(payload.role), request.url));
     }
   }
 
   // 2. Public paths — always accessible
-  const publicPaths = ['/login', '/unauthorized', '/api/auth/login', '/api/health'];
+  const publicPaths = ['/login', '/setup', '/unauthorized', '/api/auth/login', '/api/health', '/api/bootstrap'];
   if (publicPaths.some((path) => pathname === path || pathname.startsWith(path + '/'))) {
     return withSecurityHeaders(NextResponse.next());
   }
@@ -127,7 +136,7 @@ export function proxy(request: NextRequest) {
 
   // Root path redirect based on role
   if (pathname === '/') {
-    return NextResponse.redirect(new URL(`/${payload.role}`, request.url));
+    return NextResponse.redirect(new URL(getDashboardPath(payload.role), request.url));
   }
 
   // Protect role-restricted paths

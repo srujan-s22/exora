@@ -10,7 +10,7 @@ import { Separator } from '../ui/separator';
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
 
   // If no user (e.g. at login), hide sidebar
   if (!user) return null;
@@ -33,49 +33,60 @@ export function Sidebar() {
 
       {/* Nav Content */}
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-7">
-        {sections.map((section, idx) => (
-          <div key={idx} className="space-y-2">
-            {section.title && (
-              <h4 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-widest">
-                {section.title}
-              </h4>
-            )}
-            <ul className="space-y-1">
-              {section.items.map((item) => {
-                const isActive = pathname === item.href;
-                const IconComponent = (Icons as any)[item.icon] || Icons.HelpCircle;
+        {sections.map((section, idx) => {
+          const filteredItems = section.items.filter((item) => {
+            if (item.requirePermission) {
+              return hasPermission(item.requirePermission);
+            }
+            return true;
+          });
 
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all group select-none
-                        ${
-                          isActive
-                            ? 'bg-accent-500/10 text-accent-300 border-l-2 border-accent-500 font-semibold pl-3.5 shadow-sm'
-                            : 'text-gray-400 hover:bg-gray-850 hover:text-gray-100 border-l-2 border-transparent'
-                        }
-                      `}
-                    >
-                      <IconComponent
-                        size={18}
-                        className={`shrink-0 transition-colors ${
-                          isActive ? 'text-accent-400' : 'text-gray-500 group-hover:text-gray-300'
-                        }`}
-                      />
-                      <span>{item.label}</span>
-                      {item.badge && (
-                        <span className="ml-auto flex h-5 items-center justify-center rounded-full bg-accent-500/20 px-2 text-[10px] font-bold text-accent-300">
-                          {item.badge}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+          if (filteredItems.length === 0) return null;
+
+          return (
+            <div key={idx} className="space-y-2">
+              {section.title && (
+                <h4 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-widest">
+                  {section.title}
+                </h4>
+              )}
+              <ul className="space-y-1">
+                {filteredItems.map((item) => {
+                  const isActive = pathname === item.href;
+                  const IconComponent = (Icons as any)[item.icon] || Icons.HelpCircle;
+
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all group select-none
+                          ${
+                            isActive
+                              ? 'bg-accent-500/10 text-accent-300 border-l-2 border-accent-500 font-semibold pl-3.5 shadow-sm'
+                              : 'text-gray-400 hover:bg-gray-850 hover:text-gray-100 border-l-2 border-transparent'
+                          }
+                        `}
+                      >
+                        <IconComponent
+                          size={18}
+                          className={`shrink-0 transition-colors ${
+                            isActive ? 'text-accent-400' : 'text-gray-500 group-hover:text-gray-300'
+                          }`}
+                        />
+                        <span>{item.label}</span>
+                        {item.badge && (
+                          <span className="ml-auto flex h-5 items-center justify-center rounded-full bg-accent-500/20 px-2 text-[10px] font-bold text-accent-300">
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </div>
 
       {/* Footer Profile info */}
