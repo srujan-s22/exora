@@ -19,25 +19,27 @@ export function MobileNav() {
   const sections = NAVIGATION[user.role] || [];
 
   return (
-    <div className="lg:hidden flex h-16 w-full items-center justify-between border-b border-gray-800 bg-gray-950 px-5 sticky top-0 z-40 shrink-0">
-      {/* Brand Logo Link */}
-      <div className="flex items-center gap-2.5">
-        <div className="relative flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-gray-800 bg-gray-950">
-          <img src="/logo1.png" alt="EXORA Logo" className="h-full w-full object-cover" />
+    <>
+      <div className="lg:hidden flex h-16 w-full items-center justify-between border-b border-gray-800 bg-gray-950 px-5 sticky top-0 z-40 shrink-0">
+        {/* Brand Logo Link */}
+        <div className="flex items-center gap-2.5">
+          <div className="relative flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-gray-800 bg-gray-950">
+            <img src="/logo1.png" alt="EXORA Logo" className="h-full w-full object-cover" />
+          </div>
+          <span className="text-base font-bold tracking-tight text-gray-50">
+            EXORA
+          </span>
         </div>
-        <span className="text-base font-bold tracking-tight text-gray-50">
-          EXORA
-        </span>
-      </div>
 
-      {/* Hamburger Toggle button */}
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-md text-gray-400 hover:text-gray-200 hover:bg-gray-900 p-2 transition-colors cursor-pointer"
-        aria-label="Open menu"
-      >
-        <Icons.Menu size={20} />
-      </button>
+        {/* Hamburger Toggle button */}
+        <button
+          onClick={() => setOpen(true)}
+          className="rounded-md text-gray-400 hover:text-gray-200 hover:bg-gray-900 p-2 transition-colors cursor-pointer"
+          aria-label="Open menu"
+        >
+          <Icons.Menu size={20} />
+        </button>
+      </div>
 
       {/* Sliding Navigation drawer */}
       <Drawer open={open} onClose={() => setOpen(false)} placement="left" title="Menu" size="sm">
@@ -108,6 +110,6 @@ export function MobileNav() {
           </div>
         </div>
       </Drawer>
-    </div>
+    </>
   );
 }

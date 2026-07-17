@@ -567,7 +567,7 @@ export default function StaffManagementPage() {
             options={getAllowedRoles()}
           />
 
-          {createForm.role === 'admin' && (
+          {isSuperAdmin && createForm.role === 'admin' && (
             <div className="space-y-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
                 Admin Permissions

@@ -32,7 +32,7 @@ export default function GateScanHistoryPage() {
 
   // Access Control gating
   React.useEffect(() => {
-    if (!authLoading && user && user.role !== 'gate' && user.role !== 'admin') {
+    if (!authLoading && user && user.role !== 'gate' && user.role !== 'admin' && user.role !== 'super_admin') {
       router.push('/unauthorized');
     }
   }, [user, authLoading, router]);
@@ -91,7 +91,7 @@ export default function GateScanHistoryPage() {
   }, [page, exhibitionId, outcomeFilter, addToast]);
 
   React.useEffect(() => {
-    if (user && (user.role === 'gate' || user.role === 'admin')) {
+    if (user && (user.role === 'gate' || user.role === 'admin' || user.role === 'super_admin')) {
       loadExhibitions();
       loadScansHistory();
     }

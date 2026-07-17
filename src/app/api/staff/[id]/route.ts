@@ -170,6 +170,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     if (updates.password) {
+      if (!isSuperAdmin) {
+        return errorResponse('FORBIDDEN', 'Only a Super Admin can change staff passwords directly.', 403);
+      }
       staff.passwordHash = await hashPassword(updates.password);
       staff.passwordUpdatedAt = new Date();
       changes.password = { from: '***', to: '***' };

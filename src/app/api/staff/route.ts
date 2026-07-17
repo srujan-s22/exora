@@ -138,6 +138,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Sanitize permissions if created by a regular admin
+    if (currentUser.role === 'admin') {
+      parsed.data.permissions = {
+        canCreateUsers: false,
+        canResetPasswords: false,
+        canViewAuditLogs: false,
+        canManageStaff: false,
+        canApproveResets: false,
+        canCreateAdmins: false,
+      };
+    }
+
     // Create the staff member
     const created = await StaffService.create(parsed.data, currentUser.id);
 

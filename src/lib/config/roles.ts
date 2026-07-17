@@ -134,7 +134,7 @@ export const ROUTE_ROLE_MAP: Record<string, UserRoleType[]> = {
   '/admin': ['super_admin', 'admin'],
   '/counter': ['super_admin', 'admin', 'counter'],
   '/gate': ['super_admin', 'admin', 'gate'],
-  '/ride': ['super_admin', 'admin', 'gate', 'ride'],
+  '/ride': ['super_admin', 'admin', 'ride'],
 };
 
 /**

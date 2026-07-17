@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
     }
 
-    if (user.role !== 'gate' && user.role !== 'admin') {
-      return errorResponse('FORBIDDEN', 'Access Denied: Ticket scanning restricted to scanners.', 403);
+    if (user.role !== 'ride' && user.role !== 'admin' && user.role !== 'super_admin') {
+      return errorResponse('FORBIDDEN', 'Access Denied: Ride ticket scanning restricted to ride operators.', 403);
     }
 
     const body = await req.json();

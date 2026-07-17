@@ -407,15 +407,17 @@ export default function StaffDetailPage() {
                       ]}
                     />
                   )}
-                  <Input
-                    label="New Password (leave blank to keep current)"
-                    type="password"
-                    value={editForm.password}
-                    onChange={(e) => setEditForm((p) => ({ ...p, password: e.target.value }))}
-                    error={editErrors.password}
-                    leftIcon={<Key size={14} />}
-                    placeholder="Min 8 chars, upper, lower, number"
-                  />
+                  {isSuperAdmin && (
+                    <Input
+                      label="New Password (leave blank to keep current)"
+                      type="password"
+                      value={editForm.password}
+                      onChange={(e) => setEditForm((p) => ({ ...p, password: e.target.value }))}
+                      error={editErrors.password}
+                      leftIcon={<Key size={14} />}
+                      placeholder="Min 8 chars, upper, lower, number"
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">

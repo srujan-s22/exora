@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
     }
 
-    if (user.role !== 'admin' && user.role !== 'gate') {
+    if (user.role !== 'gate' && user.role !== 'admin' && user.role !== 'super_admin') {
       return errorResponse('FORBIDDEN', 'Access denied: Scanners can only be operated by gate staff.', 403);
     }
 

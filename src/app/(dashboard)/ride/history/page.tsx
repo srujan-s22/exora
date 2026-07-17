@@ -32,7 +32,7 @@ export default function RideScanHistoryPage() {
 
   // Access Control gating
   React.useEffect(() => {
-    if (!authLoading && user && user.role !== 'gate' && user.role !== 'admin') {
+    if (!authLoading && user && user.role !== 'ride' && user.role !== 'admin' && user.role !== 'super_admin') {
       router.push('/unauthorized');
     }
   }, [user, authLoading, router]);
@@ -92,7 +92,7 @@ export default function RideScanHistoryPage() {
   }, [page, assignedRide, outcomeFilter, addToast]);
 
   React.useEffect(() => {
-    if (user && (user.role === 'gate' || user.role === 'admin')) {
+    if (user && (user.role === 'ride' || user.role === 'admin' || user.role === 'super_admin')) {
       loadRideContext();
     }
   }, [user, loadRideContext]);

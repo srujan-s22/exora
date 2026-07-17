@@ -123,7 +123,6 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
       title: 'Operations',
       items: [
         { label: 'Scan Tickets', href: '/gate/scan', icon: 'ScanLine' },
-        { label: 'Scan Ride Tickets', href: '/ride', icon: 'Gamepad2' },
         { label: 'Scan History', href: '/gate/history', icon: 'History' },
       ],
     },
