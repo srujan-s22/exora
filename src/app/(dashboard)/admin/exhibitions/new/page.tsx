@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/providers/toast-provider';
+import { useAuth } from '@/components/providers/auth-provider';
 
 interface StaffOption {
   id: string;
@@ -23,6 +24,15 @@ interface StaffOption {
 export default function NewExhibitionPage() {
   const router = useRouter();
   const { addToast } = useToast();
+  const { user, isSuperAdmin, hasPermission, isLoading: authLoading } = useAuth();
+
+  React.useEffect(() => {
+    if (!authLoading && user) {
+      if (!isSuperAdmin && !hasPermission('canCreateExhibitions')) {
+        router.push('/unauthorized');
+      }
+    }
+  }, [user, authLoading, isSuperAdmin, hasPermission, router]);
 
   // Loading states
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -67,6 +77,9 @@ export default function NewExhibitionPage() {
 
   // Fetch available staff roster on mount
   React.useEffect(() => {
+    if (authLoading || (!isSuperAdmin && !hasPermission('canCreateExhibitions'))) {
+      return;
+    }
     async function loadStaff() {
       try {
         const res = await fetch('/api/staff');
@@ -216,6 +229,14 @@ export default function NewExhibitionPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (authLoading || (!isSuperAdmin && !hasPermission('canCreateExhibitions'))) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Spinner size="lg" className="text-accent-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">

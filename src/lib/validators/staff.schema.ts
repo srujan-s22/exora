@@ -23,6 +23,7 @@ export const createStaffSchema = z.object({
     canManageStaff: z.boolean().optional(),
     canApproveResets: z.boolean().optional(),
     canCreateAdmins: z.boolean().optional(),
+    canCreateExhibitions: z.boolean().optional(),
   }).optional(),
   assignedExhibitions: z.array(z.string()).optional(),
 });
@@ -53,6 +54,7 @@ export const updatePermissionsSchema = z.object({
   canManageStaff: z.boolean().optional(),
   canApproveResets: z.boolean().optional(),
   canCreateAdmins: z.boolean().optional(),
+  canCreateExhibitions: z.boolean().optional(),
 });
 
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;

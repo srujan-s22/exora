@@ -44,6 +44,7 @@ export const USER_PERMISSION_KEYS = [
   'canManageStaff',
   'canApproveResets',
   'canCreateAdmins',
+  'canCreateExhibitions',
 ] as const;
 
 export type UserPermissionKey = (typeof USER_PERMISSION_KEYS)[number];
@@ -56,6 +57,7 @@ export const DEFAULT_ADMIN_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canManageStaff: false,
   canApproveResets: false,
   canCreateAdmins: false,
+  canCreateExhibitions: false,
 };
 
 /** Super admins always have all permissions. */
@@ -66,6 +68,7 @@ export const SUPER_ADMIN_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canManageStaff: true,
   canApproveResets: true,
   canCreateAdmins: true,
+  canCreateExhibitions: true,
 };
 
 /**

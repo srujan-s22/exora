@@ -8,6 +8,7 @@ export interface IUserPermissions {
   canManageStaff: boolean;
   canApproveResets: boolean;
   canCreateAdmins: boolean;
+  canCreateExhibitions: boolean;
 }
 
 export interface IUser extends Document {
@@ -36,6 +37,7 @@ const PermissionsSchema = new Schema(
     canManageStaff: { type: Boolean, default: false },
     canApproveResets: { type: Boolean, default: false },
     canCreateAdmins: { type: Boolean, default: false },
+    canCreateExhibitions: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -85,6 +87,7 @@ const UserSchema = new Schema<IUser>(
         canManageStaff: false,
         canApproveResets: false,
         canCreateAdmins: false,
+        canCreateExhibitions: false,
       }),
     },
     assignedExhibitions: [{
@@ -126,4 +129,7 @@ UserSchema.index({ role: 1, isActive: 1 });
 UserSchema.index({ assignedExhibitions: 1 });
 UserSchema.index({ phoneNumber: 1 });
 
-export const User = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
+if (mongoose.models && mongoose.models.User) {
+  delete (mongoose.models as any).User;
+}
+export const User = mongoose.model<IUser>('User', UserSchema);

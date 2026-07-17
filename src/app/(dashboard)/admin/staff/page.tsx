@@ -66,6 +66,7 @@ export default function StaffManagementPage() {
       canManageStaff: false,
       canApproveResets: false,
       canCreateAdmins: false,
+      canCreateExhibitions: false,
     }
   });
   const [createErrors, setCreateErrors] = React.useState<Record<string, string>>({});
@@ -209,6 +210,7 @@ export default function StaffManagementPage() {
           canManageStaff: false,
           canApproveResets: false,
           canCreateAdmins: false,
+          canCreateExhibitions: false,
         }
       });
       fetchStaff();
@@ -632,6 +634,18 @@ export default function StaffManagementPage() {
                     className="rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20"
                   />
                   <span>View Audit Logs</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createForm.permissions.canCreateExhibitions}
+                    onChange={(e) => setCreateForm((p) => ({
+                      ...p,
+                      permissions: { ...p.permissions, canCreateExhibitions: e.target.checked }
+                    }))}
+                    className="rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20"
+                  />
+                  <span>Create Exhibitions</span>
                 </label>
               </div>
             </div>

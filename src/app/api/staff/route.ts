@@ -147,6 +147,7 @@ export async function POST(req: NextRequest) {
         canManageStaff: false,
         canApproveResets: false,
         canCreateAdmins: false,
+        canCreateExhibitions: false,
       };
     }
 

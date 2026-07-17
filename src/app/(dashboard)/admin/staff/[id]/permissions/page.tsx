@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ChevronLeft, Shield, ShieldCheck, Save, Users, KeyRound,
-  ScrollText, UserPlus, CheckCircle, Lock,
+  ScrollText, UserPlus, CheckCircle, Lock, Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -55,6 +55,12 @@ const PERMISSION_ITEMS: PermissionItem[] = [
     label: 'View Audit Logs',
     description: 'Allows viewing the system audit log.',
     icon: <ScrollText size={16} />,
+  },
+  {
+    key: 'canCreateExhibitions',
+    label: 'Create Exhibitions',
+    description: 'Allows creating new exhibitions.',
+    icon: <Plus size={16} />,
   },
 ];
 

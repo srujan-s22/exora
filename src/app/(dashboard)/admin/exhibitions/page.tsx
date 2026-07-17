@@ -10,11 +10,13 @@ import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Pagination } from '@/components/ui/pagination';
 import { useToast } from '@/components/providers/toast-provider';
+import { useAuth } from '@/components/providers/auth-provider';
 import type { Exhibition } from '@/types/exhibition.types';
 import type { PaginationMeta } from '@/types/api.types';
 
 export default function AdminExhibitionsPage() {
   const { addToast } = useToast();
+  const { hasPermission, isSuperAdmin } = useAuth();
   const [exhibitions, setExhibitions] = React.useState<Exhibition[]>([]);
   const [pagination, setPagination] = React.useState<PaginationMeta>({
     page: 1,
@@ -116,12 +118,14 @@ export default function AdminExhibitionsPage() {
             Create, manage, and assign staff to exhibitions across the platform.
           </p>
         </div>
-        <Link href="/admin/exhibitions/new" passHref>
-          <Button className="shrink-0 flex items-center gap-1.5 font-semibold">
-            <Plus size={16} />
-            <span>Add Exhibition</span>
-          </Button>
-        </Link>
+        {(isSuperAdmin || hasPermission('canCreateExhibitions')) && (
+          <Link href="/admin/exhibitions/new" passHref>
+            <Button className="shrink-0 flex items-center gap-1.5 font-semibold">
+              <Plus size={16} />
+              <span>Add Exhibition</span>
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Search and Filters panel */}

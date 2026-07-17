@@ -64,6 +64,10 @@ export async function POST(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'Only administrators can create exhibitions', 403);
     }
 
+    if (user.role === 'admin' && !user.permissions?.canCreateExhibitions) {
+      return errorResponse('FORBIDDEN', 'You do not have permission to create exhibitions.', 403);
+    }
+
     const body = await req.json();
     const parsed = createExhibitionSchema.safeParse(body);
     if (!parsed.success) {
