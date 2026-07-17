@@ -39,8 +39,8 @@ export default function AdminRidesEditPage() {
         const rideRes = await fetch(`/api/rides/${id}`);
         const rideBody = await rideRes.json();
 
-        // Load gate operators
-        const staffRes = await fetch('/api/staff?role=gate');
+        // Load ride operators
+        const staffRes = await fetch('/api/staff?role=ride');
         const staffBody = await staffRes.json();
 
         if (rideBody.success && staffBody.success) {
@@ -222,13 +222,13 @@ export default function AdminRidesEditPage() {
                   <span>Assign Staff</span>
                 </CardTitle>
                 <CardDescription className="text-gray-450">
-                  Assign gate validators to scan ride tickets.
+                  Assign ride operators to scan ride tickets.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-1 overflow-y-auto max-h-[300px] space-y-3">
                 {staffList.length === 0 ? (
                   <div className="text-xs text-warning-400 font-semibold py-4">
-                    No active gate staff roster accounts found. Create gate staff first.
+                    No active ride staff roster accounts found. Create ride staff first.
                   </div>
                 ) : (
                   <div className="space-y-2.5">

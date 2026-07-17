@@ -123,7 +123,7 @@ export async function PATCH(req: NextRequest) {
         performedBy: currentUser.id as any,
         performedByRole: currentUser.role,
         targetType: 'settings' as any,
-        targetId: settings._id,
+        targetId: settings._id.toString(),
         details: { changes },
       });
     }

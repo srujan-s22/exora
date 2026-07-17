@@ -51,10 +51,10 @@ export const AuthService = {
       // Create failure audit log
       await AuditService.create({
         action: 'user.login_failed',
-        performedBy: userDoc._id,
+        performedBy: userDoc._id.toString(),
         performedByRole: userDoc.role,
         targetType: 'user',
-        targetId: userDoc._id,
+        targetId: userDoc._id.toString(),
         details: { reason: 'Incorrect password', staffId },
         ipAddress,
         userAgent,
@@ -63,7 +63,7 @@ export const AuthService = {
     }
 
     // 4. Resolve permissions
-    const permissions = resolvePermissions(userDoc.role, userDoc.permissions?.toObject?.() || userDoc.permissions);
+    const permissions = resolvePermissions(userDoc.role, (userDoc.permissions as any)?.toObject?.() || userDoc.permissions);
 
     // 5. Generate JWT
     const secret = process.env.JWT_SECRET;
@@ -91,10 +91,10 @@ export const AuthService = {
     // 7. Create success audit log
     await AuditService.create({
       action: 'user.login',
-      performedBy: userDoc._id,
+      performedBy: userDoc._id.toString(),
       performedByRole: userDoc.role,
       targetType: 'user',
-      targetId: userDoc._id,
+      targetId: userDoc._id.toString(),
       details: { staffId },
       ipAddress,
       userAgent,
@@ -135,7 +135,7 @@ export const AuthService = {
         return null;
       }
 
-      const permissions = resolvePermissions(userDoc.role, userDoc.permissions?.toObject?.() || userDoc.permissions);
+      const permissions = resolvePermissions(userDoc.role, (userDoc.permissions as any)?.toObject?.() || userDoc.permissions);
 
       return {
         id: userDoc._id.toString(),
@@ -162,7 +162,7 @@ export const AuthService = {
       return null;
     }
 
-    const permissions = resolvePermissions(userDoc.role, userDoc.permissions?.toObject?.() || userDoc.permissions);
+    const permissions = resolvePermissions(userDoc.role, (userDoc.permissions as any)?.toObject?.() || userDoc.permissions);
 
     return {
       id: userDoc._id.toString(),

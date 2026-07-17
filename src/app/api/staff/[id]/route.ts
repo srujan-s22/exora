@@ -194,7 +194,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       performedBy: currentUser.id as any,
       performedByRole: currentUser.role,
       targetType: 'user',
-      targetId: staff._id,
+      targetId: staff._id.toString(),
       details: { changes },
     });
 
@@ -267,7 +267,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       performedBy: currentUser.id as any,
       performedByRole: currentUser.role,
       targetType: 'user',
-      targetId: staff._id,
+      targetId: staff._id.toString(),
       details: { staffId: staff.staffId, name: staff.name },
     });
 

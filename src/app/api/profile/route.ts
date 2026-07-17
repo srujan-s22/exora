@@ -147,7 +147,7 @@ export async function PATCH(req: NextRequest) {
         performedBy: currentUser.id as any,
         performedByRole: currentUser.role,
         targetType: 'user',
-        targetId: user._id,
+        targetId: user._id.toString(),
         details: { changes, selfUpdated: true },
       });
     }

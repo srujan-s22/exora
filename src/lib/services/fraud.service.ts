@@ -13,7 +13,7 @@ export const FraudService = {
   /**
    * Fetch aggregate counts for the fraud dashboard overview.
    */
-  async getOverviewMetrics(): Promise<FraudOverview & { suspiciousIncidents: any[] }> {
+  async getOverviewMetrics(): Promise<FraudOverview & { suspiciousIncidents: any[]; securityViolationsCount: number }> {
     await connectToDatabase();
 
     const totalScans = await TicketScanModel.countDocuments({});
@@ -23,8 +23,14 @@ export const FraudService = {
     const forgedAttempts = await TicketScanModel.countDocuments({ result: 'rejected_unknown' });
     const invalidScans = await TicketScanModel.countDocuments({ result: { $regex: /^rejected_/ } });
 
-    // Active alerts count = total rejections + suspicious audit log entries (spikes)
-    const activeAlertsCount = duplicateScans + forgedAttempts + wrongExhibitionScans;
+    // Count security violations (unauthorized password reset attempts on super admins)
+    const securityViolationsCount = await AuditLogModel.countDocuments({
+      action: 'password_reset.requested',
+      'details.unauthorizedAttempt': true
+    });
+
+    // Active alerts count = total rejections + suspicious audit log entries (spikes) + security violations
+    const activeAlertsCount = duplicateScans + forgedAttempts + wrongExhibitionScans + securityViolationsCount;
 
     // Get 15 recent suspicious scan incidents
     const suspiciousScans = await TicketScanModel.find({ result: { $ne: 'admitted' } })
@@ -34,20 +40,47 @@ export const FraudService = {
       .populate('exhibitionId', 'name')
       .populate('ticketId', 'ticketNumber');
 
-    const suspiciousIncidents = suspiciousScans.map(s => ({
-      id: s._id.toString(),
-      ticketNumber: s.ticketId?.ticketNumber || 'UNKNOWN',
-      exhibitionName: s.exhibitionId?.name || 'Exhibition',
-      exhibitionId: s.exhibitionId?._id?.toString() || '',
-      scannedBy: s.scannedBy ? {
-        name: s.scannedBy.name,
-        staffId: s.scannedBy.staffId,
-      } : null,
-      scannedAt: s.scannedAt,
-      result: s.result,
-      reason: s.reason || 'Blocked scan attempt',
-      gateId: s.gateId,
-    }));
+    // Get 15 recent security violations
+    const securityAudits = await AuditLogModel.find({
+      action: 'password_reset.requested',
+      'details.unauthorizedAttempt': true
+    })
+      .sort({ timestamp: -1 })
+      .limit(15)
+      .populate('performedBy', 'name staffId');
+
+    const suspiciousIncidents = [
+      ...suspiciousScans.map(s => ({
+        id: s._id.toString(),
+        ticketNumber: s.ticketId?.ticketNumber || 'UNKNOWN',
+        exhibitionName: s.exhibitionId?.name || 'Exhibition',
+        exhibitionId: s.exhibitionId?._id?.toString() || '',
+        scannedBy: s.scannedBy ? {
+          name: s.scannedBy.name,
+          staffId: s.scannedBy.staffId,
+        } : null,
+        scannedAt: s.scannedAt,
+        result: s.result,
+        reason: s.reason || 'Blocked scan attempt',
+        gateId: s.gateId || 'Gate Checkpoint',
+      })),
+      ...securityAudits.map(a => ({
+        id: a._id.toString(),
+        ticketNumber: 'SECURITY_ALERT',
+        exhibitionName: 'System Security',
+        exhibitionId: '',
+        scannedBy: a.performedBy ? {
+          name: a.performedBy.name,
+          staffId: a.performedBy.staffId,
+        } : null,
+        scannedAt: a.timestamp,
+        result: 'security_violation',
+        reason: a.details?.reason || 'Unauthorized password reset attempt',
+        gateId: 'Security Control',
+      }))
+    ]
+      .sort((a, b) => new Date(b.scannedAt).getTime() - new Date(a.scannedAt).getTime())
+      .slice(0, 15);
 
     return {
       totalScans,
@@ -56,6 +89,7 @@ export const FraudService = {
       duplicateScans,
       wrongExhibitionScans,
       forgedAttempts,
+      securityViolationsCount,
       activeAlertsCount,
       suspiciousIncidents,
     };
@@ -113,8 +147,8 @@ export const FraudService = {
   async getStaffRiskSummary(): Promise<StaffRiskProfile[]> {
     await connectToDatabase();
 
-    // Query active operators
-    const staff = await UserModel.find({ role: { $ne: 'admin' }, isActive: true }).sort({ name: 1 });
+    // Query active operators (excluding super_admin, including admin and other staff)
+    const staff = await UserModel.find({ role: { $ne: 'super_admin' }, isActive: true }).sort({ name: 1 });
     const profiles: StaffRiskProfile[] = [];
 
     for (const member of staff) {
@@ -166,6 +200,18 @@ export const FraudService = {
         }
       }
 
+      // Check for security violations (like attempting to reset super admin password)
+      const securityViolations = await AuditLogModel.countDocuments({
+        action: 'password_reset.requested',
+        performedBy: userId,
+        'details.unauthorizedAttempt': true
+      });
+
+      if (securityViolations > 0) {
+        riskScore = Math.min(100, riskScore + securityViolations * 75);
+        reason = `Security violation: Tried to request password reset for a Super Admin ${securityViolations} time(s).`;
+      }
+
       let riskLevel: RiskLevel = 'low';
       if (riskScore >= 80) riskLevel = 'critical';
       else if (riskScore >= 60) riskLevel = 'high';
@@ -174,7 +220,7 @@ export const FraudService = {
       profiles.push({
         staffId: member.staffId || member._id.toString(),
         name: member.name,
-        role: member.role,
+        role: member.role as 'admin' | 'counter' | 'gate' | 'ride',
         totalTransactions,
         invalidCount,
         duplicateCount,

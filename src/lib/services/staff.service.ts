@@ -204,7 +204,7 @@ export const StaffService = {
     }
 
     // Merge with existing permissions
-    const currentPerms = user.permissions?.toObject?.() || user.permissions || {};
+    const currentPerms = (user.permissions as any)?.toObject?.() || user.permissions || {};
     const updatedPerms = {
       ...DEFAULT_ADMIN_PERMISSIONS,
       ...currentPerms,

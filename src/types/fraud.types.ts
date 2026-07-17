@@ -43,7 +43,7 @@ export interface ReconciliationRow {
 export interface StaffRiskProfile {
   staffId: string;
   name: string;
-  role: 'admin' | 'counter' | 'gate';
+  role: 'admin' | 'counter' | 'gate' | 'ride';
   totalTransactions: number; // sales for counter, scans for gate
   invalidCount: number;
   duplicateCount: number;

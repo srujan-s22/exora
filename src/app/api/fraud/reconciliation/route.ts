@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
     }
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'super_admin') {
       return errorResponse('FORBIDDEN', 'Access denied: Administrators only.', 403);
     }
 

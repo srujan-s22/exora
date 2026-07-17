@@ -2,6 +2,7 @@ import { logger } from '@/lib/utils/logger';
 import { type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { AuthService } from '@/lib/services/auth.service';
+import { User as UserModel } from '@/lib/db/models/user.model';
 import { PasswordResetService } from '@/lib/services/password-reset.service';
 import { AuditService } from '@/lib/services/audit.service';
 import { connectToDatabase } from '@/lib/db/connection';
@@ -61,6 +62,8 @@ export async function GET(req: NextRequest) {
  * Admin with canResetPasswords or super admin.
  */
 export async function POST(req: NextRequest) {
+  let targetPhoneNumber: string | undefined;
+  let currentUser: any;
   try {
     await connectToDatabase();
 
@@ -69,7 +72,7 @@ export async function POST(req: NextRequest) {
     if (!token) {
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
-    const currentUser = await AuthService.verifyToken(token);
+    currentUser = await AuthService.verifyToken(token);
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
@@ -91,9 +94,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    targetPhoneNumber = parsed.data.targetPhoneNumber;
+
     const request = await PasswordResetService.createRequest(
       currentUser.id,
-      parsed.data.targetPhoneNumber
+      targetPhoneNumber
     );
 
     // Audit log
@@ -114,6 +119,22 @@ export async function POST(req: NextRequest) {
     logger.error('Error in POST /api/password-resets:', error);
 
     if (error.message === 'TARGET_IS_SUPER_ADMIN') {
+      const targetUser = await UserModel.findOne({ phoneNumber: targetPhoneNumber });
+      if (currentUser) {
+        await AuditService.create({
+          action: 'password_reset.requested',
+          performedBy: currentUser.id,
+          performedByRole: currentUser.role,
+          targetType: 'user',
+          targetId: targetUser ? targetUser._id.toString() : undefined,
+          details: {
+            targetStaffId: targetUser?.staffId || 'UNKNOWN',
+            targetPhoneNumber,
+            unauthorizedAttempt: true,
+            reason: 'Attempted to request password reset for Super Admin',
+          },
+        });
+      }
       return errorResponse('TARGET_IS_SUPER_ADMIN', 'Cannot request password reset for a super admin.', 403);
     }
 

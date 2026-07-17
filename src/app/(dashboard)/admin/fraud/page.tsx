@@ -134,14 +134,16 @@ export default function FraudDashboardPage() {
         showDivider
       />
 
-      {/* Critical Warnings Banner */}
-      {(highRiskExhibitions.length > 0 || overviewData?.forgedAttempts > 0) && (
+      {(highRiskExhibitions.length > 0 || overviewData?.forgedAttempts > 0 || overviewData?.securityViolationsCount > 0) && (
         <div className="mb-6 p-4 rounded-xl border border-red-200 bg-red-50 text-red-800 flex flex-col gap-2 shadow-sm animate-pulse">
           <div className="flex items-center gap-2">
             <AlertTriangle className="text-red-600 shrink-0" size={18} />
             <span className="font-extrabold text-sm uppercase tracking-wide">Critical Security Anomalies Flagged</span>
           </div>
           <ul className="list-disc list-inside text-xs pl-1.5 space-y-1 text-red-700">
+            {overviewData?.securityViolationsCount > 0 && (
+              <li>Detected <strong>{overviewData.securityViolationsCount}</strong> unauthorized password reset attempt(s) on Super Admin accounts.</li>
+            )}
             {overviewData?.forgedAttempts > 0 && (
               <li>Detected <strong>{overviewData.forgedAttempts}</strong> ticket QR codes with invalid cryptographic hashes (forgeries blocked).</li>
             )}
@@ -228,28 +230,44 @@ export default function FraudDashboardPage() {
                         ${inc.result === 'rejected_unknown' ? 'bg-red-500/10 text-red-600 border-red-500/20' : ''}
                         ${inc.result === 'rejected_used' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : ''}
                         ${inc.result === 'rejected_wrong_exhibition' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : ''}
+                        ${inc.result === 'security_violation' ? 'bg-red-650/20 text-red-500 border-red-500/30' : ''}
                       `}>
-                        {inc.result === 'rejected_unknown' ? 'F' : inc.result === 'rejected_used' ? 'D' : 'W'}
+                        {inc.result === 'rejected_unknown' ? 'F' : inc.result === 'rejected_used' ? 'D' : inc.result === 'security_violation' ? 'S' : 'W'}
                       </div>
 
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex justify-between items-start">
                           <p className="text-xs font-semibold text-gray-250 leading-relaxed">
-                            Ticket Ref: <Link href={`/admin/fraud/tickets/${inc.ticketNumber}`} className="font-bold text-accent-300 hover:underline">{inc.ticketNumber}</Link>
+                            {inc.result === 'security_violation' ? (
+                              <span className="font-extrabold text-red-500">{inc.ticketNumber}</span>
+                            ) : (
+                              <>
+                                Ticket Ref:{' '}
+                                <Link href={`/admin/fraud/tickets/${inc.ticketNumber}`} className="font-bold text-accent-300 hover:underline">{inc.ticketNumber}</Link>
+                              </>
+                            )}
                           </p>
                           <span className="text-[10px] font-mono text-gray-500">
                             {new Date(inc.scannedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                           </span>
                         </div>
                         <p className="text-xs text-gray-400">
-                          Blocked by gate staff <Link href={`/admin/fraud/staff/${inc.scannedBy?.staffId}`} className="font-bold text-gray-250 hover:underline">{inc.scannedBy?.name || 'Gate Operator'}</Link> at event <strong>{inc.exhibitionName}</strong>
+                          {inc.result === 'security_violation' ? (
+                            <>
+                              Triggered by operator <Link href={`/admin/fraud/staff/${inc.scannedBy?.staffId}`} className="font-bold text-gray-250 hover:underline">{inc.scannedBy?.name || 'Operator'}</Link> on system settings
+                            </>
+                          ) : (
+                            <>
+                              Blocked by gate staff <Link href={`/admin/fraud/staff/${inc.scannedBy?.staffId}`} className="font-bold text-gray-250 hover:underline">{inc.scannedBy?.name || 'Gate Operator'}</Link> at event <strong>{inc.exhibitionName}</strong>
+                            </>
+                          )}
                         </p>
-                        <p className="text-[11px] font-mono text-red-600 bg-red-500/5 px-2 py-1.5 rounded border border-red-500/10 mt-1.5 leading-snug">
+                        <p className="text-[11px] font-mono text-red-650 bg-red-500/5 px-2 py-1.5 rounded border border-red-550/10 mt-1.5 leading-snug">
                           Reason: {inc.reason}
                         </p>
                       </div>
 
-                      <Link href={`/admin/fraud/tickets/${inc.ticketNumber}`} className="flex h-7 w-7 items-center justify-center rounded bg-gray-850 hover:bg-gray-800 text-gray-400 hover:text-gray-200 self-center">
+                      <Link href={inc.result === 'security_violation' ? `/admin/fraud/staff/${inc.scannedBy?.staffId}` : `/admin/fraud/tickets/${inc.ticketNumber}`} className="flex h-7 w-7 items-center justify-center rounded bg-gray-850 hover:bg-gray-800 text-gray-400 hover:text-gray-200 self-center">
                         <Eye size={14} />
                       </Link>
                     </div>
