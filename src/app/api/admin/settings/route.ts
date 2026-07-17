@@ -41,8 +41,8 @@ export async function GET(req: NextRequest) {
     if (!settings) {
       // Create defaults
       settings = await SystemSettings.create({
-        siteTitle: 'ExhibitIQ',
-        supportEmail: 'support@exhibitiq.com',
+        siteTitle: 'EXORA',
+        supportEmail: 'support@exora.com',
         defaultTicketValidity: 24,
         ticketPrefix: 'EXH',
         maxScansPerTicket: 1,
@@ -93,8 +93,8 @@ export async function PATCH(req: NextRequest) {
 
     if (!settings) {
       settings = new SystemSettings({
-        siteTitle: 'ExhibitIQ',
-        supportEmail: 'support@exhibitiq.com',
+        siteTitle: 'EXORA',
+        supportEmail: 'support@exora.com',
         defaultTicketValidity: 24,
         ticketPrefix: 'EXH',
         maxScansPerTicket: 1,

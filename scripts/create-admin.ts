@@ -35,7 +35,7 @@ async function createAdmin() {
     _id: selfId,
     staffId: adminId,
     name: 'Soham Admin',
-    email: 'admin@exhibitiq.com',
+    email: 'admin@exora.com',
     passwordHash,
     role: 'admin',
     assignedExhibitions: [],

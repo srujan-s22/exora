@@ -103,7 +103,7 @@ async function seed() {
     _id: adminObjectId,
     staffId: 'ADM-001',
     name: 'Soham Admin',
-    email: 'admin@exhibitiq.com',
+    email: 'admin@exora.com',
     passwordHash: adminHash,
     role: 'admin',
     assignedExhibitions: [],

@@ -19,8 +19,8 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'ExhibitIQ — Exhibition Management Platform',
-    template: '%s | ExhibitIQ',
+    default: 'EXORA — Exhibition Management Platform',
+    template: '%s | EXORA',
   },
   description:
     'Premium exhibition management platform for ticket sales, gate validation, staff management, and fraud prevention.',

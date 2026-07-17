@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const AUTH_COOKIE_NAME = 'exhibitiq-token';
+const AUTH_COOKIE_NAME = 'exora-token';
 
 /**
  * Security response headers applied to every response.

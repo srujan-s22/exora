@@ -21,11 +21,11 @@ export function Sidebar() {
     <aside className="hidden w-64 shrink-0 border-r border-gray-800 bg-gray-900 lg:flex lg:flex-col h-screen sticky top-0">
       {/* Brand Header */}
       <div className="flex h-16 items-center px-6 gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-500 text-white shadow-glow border border-accent-600/30">
-          <Icons.Layers size={18} className="animate-pulse" />
+        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-gray-800 bg-gray-950">
+          <img src="/logo1.png" alt="EXORA Logo" className="h-full w-full object-cover" />
         </div>
         <span className="text-lg font-bold tracking-tight text-gray-50 bg-clip-text">
-          ExhibitIQ
+          EXORA
         </span>
       </div>
 

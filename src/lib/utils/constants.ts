@@ -2,11 +2,11 @@
  * Application-wide constants.
  */
 
-export const APP_NAME = 'ExhibitIQ';
+export const APP_NAME = 'EXORA';
 export const APP_DESCRIPTION = 'Premium Exhibition Management Platform';
 
 // ── Authentication ──
-export const AUTH_COOKIE_NAME = 'exhibitiq-token';
+export const AUTH_COOKIE_NAME = 'exora-token';
 export const AUTH_TOKEN_EXPIRY = '8h';
 export const BCRYPT_SALT_ROUNDS = 12;
 

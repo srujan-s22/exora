@@ -17,13 +17,13 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
       type: String,
       required: true,
       trim: true,
-      default: 'ExhibitIQ',
+      default: 'EXORA',
     },
     supportEmail: {
       type: String,
       required: true,
       trim: true,
-      default: 'support@exhibitiq.com',
+      default: 'support@exora.com',
     },
     defaultTicketValidity: {
       type: Number,

@@ -87,13 +87,13 @@ function LoginFormContent() {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-[1px] bg-gradient-to-r from-transparent via-accent-500/80 to-transparent" />
 
         {/* Brand */}
-        <div className="mb-8 text-center flex flex-col items-center space-y-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-500 text-white shadow-glow border border-accent-600/30 select-none">
-            <Layers size={22} className="animate-pulse" />
+        <div className="mb-8 text-center flex flex-col items-center">
+          <div className="relative w-48 h-24 select-none mb-3">
+            <img src="/logo2.png" alt="EXORA Logo" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-gray-50">
-              ExhibitIQ Platform
+              EXORA Platform
             </h1>
             <p className="mt-1.5 text-xs font-medium text-gray-400">
               Enter credentials to access operations dashboard

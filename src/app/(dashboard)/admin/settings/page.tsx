@@ -40,8 +40,8 @@ export default function SettingsPage() {
 
   // System Settings Form State
   const [systemForm, setSystemForm] = React.useState({
-    siteTitle: 'ExhibitIQ',
-    supportEmail: 'support@exhibitiq.com',
+    siteTitle: 'EXORA',
+    supportEmail: 'support@exora.com',
     defaultTicketValidity: 24,
     ticketPrefix: 'EXH',
     maxScansPerTicket: 1,

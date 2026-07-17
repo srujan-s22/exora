@@ -22,11 +22,11 @@ export function MobileNav() {
     <div className="lg:hidden flex h-16 w-full items-center justify-between border-b border-gray-800 bg-gray-950 px-5 sticky top-0 z-40 shrink-0">
       {/* Brand Logo Link */}
       <div className="flex items-center gap-2.5">
-        <div className="flex h-7.5 w-7.5 items-center justify-center rounded-lg bg-accent-500 text-white shadow-glow border border-accent-600/30">
-          <Icons.Layers size={15} />
+        <div className="relative flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-gray-800 bg-gray-950">
+          <img src="/logo1.png" alt="EXORA Logo" className="h-full w-full object-cover" />
         </div>
         <span className="text-base font-bold tracking-tight text-gray-50">
-          ExhibitIQ
+          EXORA
         </span>
       </div>
 
