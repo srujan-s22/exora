@@ -10,9 +10,11 @@ import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/providers/toast-provider';
+import { useAuth } from '@/components/providers/auth-provider';
 
 export default function AuditLogsPage() {
   const { addToast } = useToast();
+  const { hasPermission } = useAuth();
   const [isLoading, setIsLoading] = React.useState(true);
   const [logs, setLogs] = React.useState<any[]>([]);
   const [pagination, setPagination] = React.useState<any>({
@@ -31,6 +33,7 @@ export default function AuditLogsPage() {
   const [endDate, setEndDate] = React.useState('');
 
   const fetchLogs = React.useCallback(async () => {
+    if (!hasPermission('canViewAuditLogs')) return;
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
@@ -83,7 +86,7 @@ export default function AuditLogsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, actionFilter, searchStaff, startDate, endDate, addToast]);
+  }, [currentPage, actionFilter, searchStaff, startDate, endDate, addToast, hasPermission]);
 
   React.useEffect(() => {
     fetchLogs();
@@ -159,6 +162,31 @@ export default function AuditLogsPage() {
       return 'Error parsing details';
     }
   };
+
+  if (!hasPermission('canViewAuditLogs')) {
+    return (
+      <ContentWrapper>
+        <div className="flex flex-col items-center justify-center flex-grow py-16">
+          <Card className="max-w-md w-full border border-red-900/30 bg-red-950/10 backdrop-blur-sm p-8 text-center shadow-xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 text-red-500 mb-5 border border-red-500/20">
+              <AlertCircle size={28} />
+            </div>
+            <CardTitle className="text-xl font-bold text-gray-50 mb-3">Access Denied</CardTitle>
+            <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+              You do not have the required permission to view audit logs. Please contact a super administrator to request access.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => window.history.back()}
+              className="w-full font-semibold"
+            >
+              Go Back
+            </Button>
+          </Card>
+        </div>
+      </ContentWrapper>
+    );
+  }
 
   return (
     <ContentWrapper>

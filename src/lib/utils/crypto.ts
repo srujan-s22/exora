@@ -43,7 +43,7 @@ export function verifyHmac(data: string, signature: string, secret: string): boo
  * Used for creating qrHash for fast ticket lookup.
  */
 export function sha256(data: string): string {
-  const salt = process.env.QR_HMAC_SECRET || 'exhibitiq-hash-salt';
+  const salt = process.env.QR_HMAC_SECRET || 'exora-hash-salt';
   return createHmac('sha256', salt).update(data).digest('hex');
 }
 

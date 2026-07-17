@@ -68,9 +68,9 @@ async function createUser() {
     _id: selfId,
     staffId,
     name,
+    phoneNumber: '98765' + Math.floor(10000 + Math.random() * 90000),
     passwordHash,
-    role: role.toLowerCase(),
-    isSuperAdmin,
+    role: isSuperAdmin ? 'super_admin' : role.toLowerCase(),
     assignedExhibitions: [],
     isActive: true,
     createdBy: selfId, // self-created or admin-created

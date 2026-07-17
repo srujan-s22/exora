@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { Pagination } from '@/components/ui/pagination';
 import { Modal } from '@/components/ui/modal';
+import { Card, CardTitle } from '@/components/ui/card';
+import { ContentWrapper } from '@/components/layout/content-wrapper';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
 import type { TableColumn, BadgeVariant } from '@/types/ui.types';
@@ -42,7 +44,7 @@ function formatDate(d: string | Date): string {
 
 export default function PasswordResetsPage() {
   const { addToast } = useToast();
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, hasPermission } = useAuth();
 
   const [requests, setRequests] = React.useState<PasswordResetRequest[]>([]);
   const [pagination, setPagination] = React.useState<PaginationMeta>({
@@ -70,6 +72,7 @@ export default function PasswordResetsPage() {
   const [showRedFlash, setShowRedFlash] = React.useState(false);
 
   const fetchRequests = React.useCallback(async () => {
+    if (!isSuperAdmin && !hasPermission('canResetPasswords')) return;
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -91,7 +94,7 @@ export default function PasswordResetsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, statusFilter, addToast]);
+  }, [currentPage, statusFilter, addToast, isSuperAdmin, hasPermission]);
 
   React.useEffect(() => {
     fetchRequests();
@@ -331,6 +334,31 @@ export default function PasswordResetsPage() {
     { label: 'Completed', value: 'completed' },
     { label: 'Rejected', value: 'rejected' },
   ];
+
+  if (!isSuperAdmin && !hasPermission('canResetPasswords')) {
+    return (
+      <ContentWrapper>
+        <div className="flex flex-col items-center justify-center flex-grow py-16">
+          <Card className="max-w-md w-full border border-red-900/30 bg-red-950/10 backdrop-blur-sm p-8 text-center shadow-xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 text-red-500 mb-5 border border-red-500/20">
+              <AlertTriangle size={28} />
+            </div>
+            <CardTitle className="text-xl font-bold text-gray-50 mb-3">Access Denied</CardTitle>
+            <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+              You do not have the required permission to access password resets. Please contact a super administrator to request access.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => window.history.back()}
+              className="w-full font-semibold"
+            >
+              Go Back
+            </Button>
+          </Card>
+        </div>
+      </ContentWrapper>
+    );
+  }
 
   return (
     <>

@@ -23,8 +23,12 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
     }
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'super_admin' && user.role !== 'admin') {
       return errorResponse('FORBIDDEN', 'Access denied: Administrators only.', 403);
+    }
+
+    if (user.role === 'admin' && !user.permissions?.canViewAuditLogs) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to view audit logs.', 403);
     }
 
     const { searchParams } = new URL(req.url);

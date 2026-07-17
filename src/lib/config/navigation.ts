@@ -86,7 +86,7 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
         { label: 'Fraud & Alerts', href: '/admin/fraud', icon: 'ShieldAlert' },
         { label: 'Reconciliation', href: '/admin/reconciliation', icon: 'Scale' },
         { label: 'Risk Profiling', href: '/admin/risk', icon: 'ShieldQuestion' },
-        { label: 'Audit Logs', href: '/admin/audit-logs', icon: 'ScrollText' },
+        { label: 'Audit Logs', href: '/admin/audit-logs', icon: 'ScrollText', requirePermission: 'canViewAuditLogs' },
       ],
     },
     {

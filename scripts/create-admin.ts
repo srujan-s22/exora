@@ -36,6 +36,7 @@ async function createAdmin() {
     staffId: adminId,
     name: 'Soham Admin',
     email: 'admin@exora.com',
+    phoneNumber: '9876500000',
     passwordHash,
     role: 'admin',
     assignedExhibitions: [],

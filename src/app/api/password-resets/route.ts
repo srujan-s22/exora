@@ -29,6 +29,10 @@ export async function GET(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
+    if (currentUser.role === 'admin' && !currentUser.permissions?.canResetPasswords) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to view password resets.', 403);
+    }
+
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || undefined;
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));

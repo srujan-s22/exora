@@ -104,6 +104,7 @@ async function seed() {
     staffId: 'ADM-001',
     name: 'Soham Admin',
     email: 'admin@exora.com',
+    phoneNumber: '9876500000',
     passwordHash: adminHash,
     role: 'admin',
     assignedExhibitions: [],
@@ -115,6 +116,7 @@ async function seed() {
   const counter1 = await User.create({
     staffId: 'CTR-001',
     name: 'Soham Counter Staff 1',
+    phoneNumber: '9876500001',
     passwordHash: counterHash,
     role: 'counter',
     assignedExhibitions: [exh1._id, exh2._id],
@@ -125,6 +127,7 @@ async function seed() {
   const counter2 = await User.create({
     staffId: 'CTR-002',
     name: 'Soham Counter Staff 2',
+    phoneNumber: '9876500002',
     passwordHash: counterHash,
     role: 'counter',
     assignedExhibitions: [exh1._id],
@@ -136,6 +139,7 @@ async function seed() {
   const gate1 = await User.create({
     staffId: 'GTE-001',
     name: 'Soham Gate Staff 1',
+    phoneNumber: '9876500003',
     passwordHash: gateHash,
     role: 'gate',
     assignedExhibitions: [exh1._id, exh2._id],
@@ -146,6 +150,7 @@ async function seed() {
   const gate2 = await User.create({
     staffId: 'GTE-002',
     name: 'Soham Gate Staff 2',
+    phoneNumber: '9876500004',
     passwordHash: gateHash,
     role: 'gate',
     assignedExhibitions: [exh1._id],
