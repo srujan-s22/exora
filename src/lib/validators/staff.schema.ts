@@ -26,6 +26,7 @@ export const createStaffSchema = z.object({
     canCreateExhibitions: z.boolean().optional(),
   }).optional(),
   assignedExhibitions: z.array(z.string()).optional(),
+  superAdminSecret: z.string().optional(),
 });
 
 export const updateStaffSchema = z.object({
@@ -45,6 +46,7 @@ export const updateStaffSchema = z.object({
     .optional(),
   assignedExhibitions: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
+  superAdminSecret: z.string().optional(),
 });
 
 export const updatePermissionsSchema = z.object({

@@ -5,11 +5,12 @@ import { User as UserModel } from '@/lib/db/models/user.model';
 import { AuthService } from '@/lib/services/auth.service';
 import { StaffService } from '@/lib/services/staff.service';
 import { connectToDatabase } from '@/lib/db/connection';
-import { successResponse, errorResponse, createdResponse, paginatedResponse } from '@/lib/utils/api-response';
+import { errorResponse, createdResponse, paginatedResponse } from '@/lib/utils/api-response';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { createStaffSchema } from '@/lib/validators/staff.schema';
 import { AuditService } from '@/lib/services/audit.service';
 import { escapeRegex, safeErrorMessage } from '@/lib/utils/sanitize';
+import { timingSafeStringEqual } from '@/lib/utils/crypto';
 
 /**
  * GET /api/staff
@@ -117,7 +118,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { role } = parsed.data;
+    const { role, superAdminSecret } = parsed.data;
+
+    // Check super admin secret if creating a super admin
+    if (role === 'super_admin') {
+      const envSecret = process.env.SUPER_ADMIN_SECRET;
+      if (!envSecret) {
+        return errorResponse(
+          'INTERNAL_ERROR',
+          'SUPER_ADMIN_SECRET is not configured on the server.',
+          500
+        );
+      }
+      if (!superAdminSecret || !timingSafeStringEqual(superAdminSecret, envSecret)) {
+        return errorResponse(
+          'FORBIDDEN',
+          'Invalid Super Admin Secret Key.',
+          403
+        );
+      }
+    }
 
     // Permission check: can this user create a user with this role?
     if (!StaffService.canCreateRole(currentUser, role)) {

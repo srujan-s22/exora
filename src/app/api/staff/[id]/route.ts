@@ -9,7 +9,7 @@ import { connectToDatabase } from '@/lib/db/connection';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { updateStaffSchema } from '@/lib/validators/staff.schema';
-import { hashPassword } from '@/lib/utils/crypto';
+import { hashPassword, timingSafeStringEqual } from '@/lib/utils/crypto';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -148,6 +148,27 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       if (!isSuperAdmin) {
         return errorResponse('FORBIDDEN', 'Only a Super Admin can change user roles.', 403);
       }
+
+      // If promoting to super_admin, verify the secret key
+      if (updates.role === 'super_admin') {
+        const envSecret = process.env.SUPER_ADMIN_SECRET;
+        if (!envSecret) {
+          return errorResponse(
+            'INTERNAL_ERROR',
+            'SUPER_ADMIN_SECRET is not configured on the server.',
+            500
+          );
+        }
+        const { superAdminSecret } = updates;
+        if (!superAdminSecret || !timingSafeStringEqual(superAdminSecret, envSecret)) {
+          return errorResponse(
+            'FORBIDDEN',
+            'Invalid Super Admin Secret Key.',
+            403
+          );
+        }
+      }
+
       changes.role = { from: staff.role, to: updates.role };
       staff.role = updates.role;
     }

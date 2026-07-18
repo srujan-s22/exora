@@ -74,6 +74,7 @@ export default function StaffDetailPage() {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editForm, setEditForm] = React.useState({
     name: '', email: '', role: '', password: '', phoneNumber: '', assignedExhibitions: [] as string[],
+    superAdminSecret: '',
   });
   const [editErrors, setEditErrors] = React.useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = React.useState(false);
@@ -136,6 +137,7 @@ export default function StaffDetailPage() {
       assignedExhibitions: (staff.assignedExhibitions as any[]).map((e: any) =>
         typeof e === 'string' ? e : e.id || e._id?.toString()
       ),
+      superAdminSecret: '',
     });
     setEditErrors({});
     setIsEditing(true);
@@ -152,6 +154,9 @@ export default function StaffDetailPage() {
     }
     if (editForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email)) {
       errors.email = 'Invalid email address';
+    }
+    if (editForm.role === 'super_admin' && staff?.role !== 'super_admin' && !editForm.superAdminSecret?.trim()) {
+      errors.superAdminSecret = 'Super Admin Secret Key is required';
     }
     if (editForm.password) {
       if (editForm.password.length < 8) errors.password = 'Min 8 characters';
@@ -178,6 +183,9 @@ export default function StaffDetailPage() {
       };
       if (editForm.password) {
         payload.password = editForm.password;
+      }
+      if (editForm.role === 'super_admin' && staff?.role !== 'super_admin') {
+        payload.superAdminSecret = editForm.superAdminSecret;
       }
 
       const res = await fetch(`/api/staff/${id}`, {
@@ -405,6 +413,17 @@ export default function StaffDetailPage() {
                         { label: 'Gate', value: 'gate' },
                         { label: 'Ride', value: 'ride' },
                       ]}
+                    />
+                  )}
+                  {isSuperAdmin && editForm.role === 'super_admin' && staff?.role !== 'super_admin' && (
+                    <Input
+                      label="Super Admin Secret Key"
+                      placeholder="Enter SUPER_ADMIN_SECRET"
+                      type="password"
+                      value={editForm.superAdminSecret}
+                      onChange={(e) => setEditForm((p) => ({ ...p, superAdminSecret: e.target.value }))}
+                      error={editErrors.superAdminSecret}
+                      leftIcon={<Key size={14} />}
                     />
                   )}
                   {isSuperAdmin && (

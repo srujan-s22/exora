@@ -25,6 +25,7 @@ export interface CreateStaffInput {
   password: string;
   permissions?: Partial<Record<UserPermissionKey, boolean>>;
   assignedExhibitions?: string[];
+  superAdminSecret?: string;
 }
 
 export interface UpdateStaffInput {
@@ -36,4 +37,5 @@ export interface UpdateStaffInput {
   permissions?: Partial<Record<UserPermissionKey, boolean>>;
   assignedExhibitions?: string[];
   isActive?: boolean;
+  superAdminSecret?: string;
 }

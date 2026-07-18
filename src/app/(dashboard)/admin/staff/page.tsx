@@ -41,7 +41,7 @@ function formatDate(d: string | Date): string {
 
 export default function StaffManagementPage() {
   const { addToast } = useToast();
-  const { user: currentUser, hasPermission, isSuperAdmin } = useAuth();
+  const { hasPermission, isSuperAdmin } = useAuth();
 
   // List state
   const [staff, setStaff] = React.useState<Staff[]>([]);
@@ -59,6 +59,7 @@ export default function StaffManagementPage() {
   const [exhibitions, setExhibitions] = React.useState<Exhibition[]>([]);
   const [createForm, setCreateForm] = React.useState({
     name: '', email: '', role: 'counter', password: '', phoneNumber: '', assignedExhibitions: [] as string[],
+    superAdminSecret: '',
     permissions: {
       canCreateUsers: false,
       canResetPasswords: false,
@@ -165,6 +166,9 @@ export default function StaffManagementPage() {
     if (createForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createForm.email)) {
       errors.email = 'Invalid email address';
     }
+    if (createForm.role === 'super_admin' && !createForm.superAdminSecret?.trim()) {
+      errors.superAdminSecret = 'Super Admin Secret Key is required';
+    }
 
     if (Object.keys(errors).length > 0) {
       setCreateErrors(errors);
@@ -186,6 +190,7 @@ export default function StaffManagementPage() {
           password: createForm.password,
           assignedExhibitions: createForm.assignedExhibitions,
           permissions: createForm.role === 'admin' ? createForm.permissions : undefined,
+          superAdminSecret: createForm.role === 'super_admin' ? createForm.superAdminSecret : undefined,
         }),
       });
 
@@ -203,6 +208,7 @@ export default function StaffManagementPage() {
       setShowCreateModal(false);
       setCreateForm({
         name: '', email: '', role: 'counter', password: '', phoneNumber: '', assignedExhibitions: [],
+        superAdminSecret: '',
         permissions: {
           canCreateUsers: false,
           canResetPasswords: false,
@@ -568,6 +574,18 @@ export default function StaffManagementPage() {
             onChange={(e) => setCreateForm((p) => ({ ...p, role: e.target.value }))}
             options={getAllowedRoles()}
           />
+
+          {createForm.role === 'super_admin' && (
+            <Input
+              label="Super Admin Secret Key"
+              placeholder="Enter SUPER_ADMIN_SECRET to create super admin"
+              type="password"
+              value={createForm.superAdminSecret}
+              onChange={(e) => setCreateForm((p) => ({ ...p, superAdminSecret: e.target.value }))}
+              error={createErrors.superAdminSecret}
+              leftIcon={<KeyRound size={14} />}
+            />
+          )}
 
           {isSuperAdmin && createForm.role === 'admin' && (
             <div className="space-y-2 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
