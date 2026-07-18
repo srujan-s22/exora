@@ -2,24 +2,31 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Gamepad2, Play, Square, QrCode, History, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react';
-import Link from 'next/link';
+import { Gamepad2, Play, Square, History, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useToast } from '@/components/providers/toast-provider';
 import { ContentWrapper } from '@/components/layout/content-wrapper';
+import { PageHeader } from '@/components/layout/page-header';
+import { StatCard } from '@/components/shared/stat-card';
+import { QRScanner } from '@/components/shared/qr-scanner';
+import { ScanResultCard } from '@/components/shared/scan-result-card';
+import { DataTable } from '@/components/ui/data-table';
+import { StatusIndicator } from '@/components/shared/status-indicator';
 
 export default function RideStaffDashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const { addToast } = useToast();
   const router = useRouter();
 
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [dataLoading, setDataLoading] = React.useState(true);
   const [dashboardData, setDashboardData] = React.useState<any>(null);
   const [isActionLoading, setIsActionLoading] = React.useState(false);
+
+  // Scanner outcome state
+  const [activeScan, setActiveScan] = React.useState<any | null>(null);
+  const [isProcessing, setIsProcessing] = React.useState(false);
 
   // Auth gate check
   React.useEffect(() => {
@@ -29,8 +36,8 @@ export default function RideStaffDashboard() {
   }, [user, authLoading, router]);
 
   const loadDashboardData = React.useCallback(async () => {
-    setIsLoading(true);
     try {
+      setDataLoading(true);
       const res = await fetch('/api/dashboard/ride-stats?staffDashboard=true');
       if (res.ok) {
         const body = await res.json();
@@ -47,7 +54,7 @@ export default function RideStaffDashboard() {
         message: err.message || 'Check your connection.',
       });
     } finally {
-      setIsLoading(false);
+      setDataLoading(false);
     }
   }, [addToast]);
 
@@ -92,7 +99,134 @@ export default function RideStaffDashboard() {
     }
   };
 
-  if (authLoading || isLoading) {
+  const handleScanTrigger = async (payload: string, isFake = false) => {
+    if (!dashboardData?.assigned || !dashboardData?.ride) {
+      addToast({
+        type: 'warning',
+        title: 'Ride Assignment Required',
+        message: 'You have no active ride assigned.',
+      });
+      return;
+    }
+
+    const { ride } = dashboardData;
+    setIsProcessing(true);
+
+    try {
+      const payloadToSend = isFake ? 'tampered-fake-signature-token-payload' : payload;
+
+      const res = await fetch('/api/rides/tickets/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qrPayload: payloadToSend,
+          exhibitionId: ride.exhibitionId,
+          rideId: ride.id,
+          gateId: 'ride-dashboard-terminal',
+        }),
+      });
+
+      const body = await res.json();
+      if (res.ok && body.success) {
+        const outcome = body.data; // contains valid, result, ticket, message
+        
+        const scanRecord = {
+          id: `scan-${Date.now()}`,
+          result: outcome.result,
+          ticketNumber: outcome.ticket?.ticketNumber || 'UNKNOWN',
+          ticketType: outcome.ticket?.ticketType || 'ride',
+          customerName: outcome.ticket?.customerName,
+          errorDetails: outcome.valid ? undefined : outcome.message,
+          scannedAt: new Date(),
+        };
+
+        setActiveScan(scanRecord);
+
+        // Feedback alert
+        if (outcome.valid) {
+          addToast({
+            type: 'success',
+            title: 'Rider Admitted',
+            message: `${scanRecord.ticketNumber} verified successfully.`,
+          });
+        } else {
+          addToast({
+            type: 'error',
+            title: 'Scan Rejected',
+            message: outcome.message,
+          });
+        }
+
+        // Refresh stats
+        loadDashboardData();
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Verification Failed',
+          message: body.error?.message || 'Verification endpoint encountered a crash.',
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      addToast({
+        type: 'error',
+        title: 'Network Timeout',
+        message: 'Validation API request timed out.',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const columns = [
+    {
+      key: 'ticketId',
+      label: 'Ticket Ref',
+      render: (t: any, row: any) => {
+        const number = row.ticketNumber || (typeof t === 'object' ? t?.ticketNumber : t) || 'UNKNOWN';
+        return <span className="font-mono font-bold">{number}</span>;
+      },
+    },
+    {
+      key: 'result',
+      label: 'Outcome Status',
+      render: (v: any) => {
+        const statusMap: Record<string, string> = {
+          admitted: 'active',
+          rejected_used: 'paused',
+          rejected_wrong_ride: 'false',
+          rejected_invalid: 'false',
+          rejected_closed: 'false',
+          rejected_unknown: 'false',
+        };
+        const labelMap: Record<string, string> = {
+          admitted: 'Admitted',
+          rejected_used: 'Duplicate',
+          rejected_wrong_ride: 'Wrong Ride',
+          rejected_invalid: 'Invalid Pass',
+          rejected_closed: 'Ride Closed',
+          rejected_unknown: 'Suspicious/Forged',
+        };
+        return (
+          <span className="flex items-center gap-1">
+            <StatusIndicator status={statusMap[v] || 'false'} />
+            <span className="text-xs text-gray-400 font-medium ml-1">({labelMap[v] || v})</span>
+          </span>
+        );
+      },
+    },
+    {
+      key: 'scannedAt',
+      label: 'Scanned At',
+      render: (v: any) => (
+        <span className="font-mono text-gray-400">
+          {new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(v))}
+        </span>
+      ),
+    },
+  ];
+
+  if (authLoading || dataLoading) {
     return (
       <ContentWrapper>
         <div className="flex h-[60dvh] items-center justify-center">
@@ -106,8 +240,11 @@ export default function RideStaffDashboard() {
   if (!dashboardData || !dashboardData.assigned) {
     return (
       <ContentWrapper>
+        <PageHeader title="Ride Scanner Terminal" description="Verify rider admission passes." showDivider />
         <div className="mx-auto max-w-lg mt-12 p-8 text-center bg-gray-900 border border-gray-800 rounded-xl">
-          <Gamepad2 size={48} className="text-warning-400 mx-auto mb-4 animate-pulse" />
+          <div className="flex justify-center text-warning mb-4">
+            <AlertCircle size={48} />
+          </div>
           <h2 className="text-xl font-bold text-gray-50 mb-2">No Ride Assigned</h2>
           <p className="text-sm text-gray-400 mb-6">
             Your account is currently not assigned to scan tickets for any rides or games inside the exhibition. Please contact your system administrator.
@@ -130,153 +267,65 @@ export default function RideStaffDashboard() {
   return (
     <ContentWrapper>
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div>
-          <span className="text-[10px] font-bold text-accent-400 uppercase tracking-widest block mb-1">
-            Ride Checkpoint Desk
-          </span>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-50 flex items-center gap-2">
-            <Gamepad2 className="text-accent-400 shrink-0" />
-            <span>Dashboard: {ride.name}</span>
-          </h1>
-          {ride.description && (
-            <p className="mt-1 text-sm text-gray-400 max-w-2xl">{ride.description}</p>
-          )}
-        </div>
+      <PageHeader
+        title={`Ride Scanner Terminal: ${ride.name}`}
+        description="Verify ride entrance QR credentials in real time. Prevents duplicate checks and expired passes."
+        showDivider
+      />
 
-        <div className="flex gap-3 shrink-0">
-          <Button
-            variant="secondary"
-            disabled={isActionLoading}
-            onClick={handleToggleStatus}
-            leftIcon={ride.status === 'open' ? <Square size={14} className="text-error" /> : <Play size={14} className="text-success" />}
-            className="font-semibold text-xs"
-          >
-            {ride.status === 'open' ? 'Close Ride' : 'Open Ride'}
-          </Button>
-          <Link href="/ride/scan" passHref>
-            <Button className="font-bold flex items-center gap-1.5" leftIcon={<QrCode size={15} />}>
-              Launch Scanner
-            </Button>
-          </Link>
+      {/* Statistics Shift summary cards */}
+      <div className="grid gap-5 sm:grid-cols-3 mb-8">
+        <StatCard
+          title="Riders Admitted Today"
+          value={validCount || 0}
+          icon="CheckCircle2"
+        />
+        <StatCard
+          title="Total Scans Processed"
+          value={totalScansToday || 0}
+          icon="ScanLine"
+        />
+        <StatCard
+          title="Failed / Blocked Attempts"
+          value={invalidCount || 0}
+          icon="ShieldAlert"
+        />
+      </div>
+
+      {/* Scope Details Bar */}
+      <div className="mb-6 bg-gray-900 border border-gray-800 p-4 rounded-xl max-w-md select-none">
+        <span className="block text-[10px] font-bold text-accent-400 uppercase tracking-widest mb-2">Assigned Checkpoint Ride Context</span>
+        <div className="flex justify-between items-center bg-gray-950 px-3.5 py-2.5 rounded-lg border border-gray-850">
+          <span className="text-sm font-bold text-gray-100">{ride.name}</span>
+          <span className="text-xs text-accent-300 font-bold">₹{ride.price / 100} / rider</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Stats Column */}
-        <div className="lg:col-span-2 space-y-6">
-          <h2 className="text-base font-bold uppercase tracking-wider text-gray-400">Today's Checkpoint Statistics</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            
-            <Card className="bg-gray-900 border-gray-800">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="p-3 bg-accent-500/10 rounded-lg text-accent-400 border border-accent-500/20">
-                  <QrCode size={24} />
-                </div>
-                <div>
-                  <span className="text-xs text-gray-400 font-medium">Tickets Issued</span>
-                  <h3 className="text-2xl font-bold text-gray-100 mt-0.5">{todayTicketsCount}</h3>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gray-900 border-gray-800">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="p-3 bg-success/10 rounded-lg text-success border border-success/20">
-                  <CheckCircle size={24} />
-                </div>
-                <div>
-                  <span className="text-xs text-gray-400 font-medium">Admitted</span>
-                  <h3 className="text-2xl font-bold text-success mt-0.5">{validCount}</h3>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gray-900 border-gray-800">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="p-3 bg-error/10 rounded-lg text-error border border-error/20">
-                  <AlertTriangle size={24} />
-                </div>
-                <div>
-                  <span className="text-xs text-gray-400 font-medium">Failed Scans</span>
-                  <h3 className="text-2xl font-bold text-error mt-0.5">{invalidCount}</h3>
-                </div>
-              </CardContent>
-            </Card>
-
-          </div>
-
-          {/* Ride Info settings */}
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="py-4 border-b border-gray-850">
-              <CardTitle className="text-sm font-bold text-gray-200 uppercase tracking-wider">Ride Operation Details</CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 space-y-4 text-sm">
-              <div className="flex justify-between py-1 border-b border-gray-850">
-                <span className="text-gray-400">Exhibition ID Reference</span>
-                <span className="font-mono text-gray-250">{ride.exhibitionId}</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-850">
-                <span className="text-gray-400">Price per ticket</span>
-                <span className="font-bold text-gray-200">₹{(ride.price / 100).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-gray-400">Operator Assigned Status</span>
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold capitalize
-                  ${ride.status === 'open' ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}
-                `}>
-                  {ride.status}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid gap-6 lg:grid-cols-3 items-start">
+        {/* Scanner view (Left) */}
+        <div className="lg:col-span-1">
+          {!activeScan ? (
+            <QRScanner onScan={handleScanTrigger} isProcessing={isProcessing} />
+          ) : (
+            <ScanResultCard
+              result={activeScan.result}
+              ticketNumber={activeScan.ticketNumber}
+              ticketType={activeScan.ticketType}
+              customerName={activeScan.customerName}
+              errorDetails={activeScan.errorDetails}
+              scannedAt={activeScan.scannedAt}
+              onReset={() => setActiveScan(null)}
+            />
+          )}
         </div>
 
-        {/* Scan Log History Column */}
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-base font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
-              <History size={16} />
-              <span>Recent Scan Activities</span>
-            </h2>
-            <Link href="/ride/history" className="text-xs text-accent-400 hover:text-accent-300 font-bold uppercase tracking-wide">
-              View History
-            </Link>
-          </div>
-
-          <Card className="bg-gray-900 border-gray-800 flex-1 h-[320px] flex flex-col">
-            <CardContent className="p-4 flex-1 overflow-y-auto space-y-3.5">
-              {recentScans.length === 0 ? (
-                <div className="text-xs text-gray-500 text-center py-12">No scans processed today.</div>
-              ) : (
-                recentScans.map((scan: any) => {
-                  const isSuccess = scan.result === 'admitted';
-                  const timestampStr = new Intl.DateTimeFormat('en-IN', { timeStyle: 'short' }).format(new Date(scan.scannedAt));
-
-                  return (
-                    <div key={scan.id} className="flex items-start justify-between gap-3 p-3 rounded-lg bg-gray-850/50 border border-gray-800">
-                      <div className="min-w-0">
-                        <p className="text-xs font-mono font-bold text-gray-200">
-                          {scan.ticketId?.ticketNumber || 'UNKNOWN'}
-                        </p>
-                        <p className="text-[10px] text-gray-400 mt-1 max-w-[150px] truncate">
-                          {scan.reason || (isSuccess ? 'Access Granted' : 'Rejected')}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider
-                          ${isSuccess ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}
-                        `}>
-                          {scan.result}
-                        </span>
-                        <span className="block text-[9px] text-gray-500 font-semibold mt-1">{timestampStr}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </CardContent>
-          </Card>
+        {/* Scan log feed (Right) */}
+        <div className="lg:col-span-2 space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 select-none flex items-center gap-2">
+            <History size={15} className="text-gray-500" />
+            <span>Ride Entrance Logs (Today)</span>
+          </h3>
+          <DataTable columns={columns} data={recentScans} />
         </div>
       </div>
     </ContentWrapper>
