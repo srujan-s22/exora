@@ -572,7 +572,17 @@ export const TicketService = {
       .populate('soldBy', 'name staffId')
       .populate('usedBy', 'name staffId')
       .populate('createdBy', 'name staffId');
-    return doc ? (doc.toJSON() as unknown as Ticket) : null;
+    
+    if (doc) return doc.toJSON() as unknown as Ticket;
+
+    // Fallback: Check if it's a ride ticket
+    const { RideTicket: RideTicketModel } = await import('@/lib/db/models/ride-ticket.model');
+    const rideDoc = await RideTicketModel.findById(id)
+      .populate('exhibitionId', 'name venue startDate endDate')
+      .populate('rideId', 'name price')
+      .populate('soldBy', 'name staffId');
+    
+    return rideDoc ? (rideDoc.toJSON() as unknown as any) : null;
   },
 
   async listByExhibition(exhibitionId: string, params: PaginationParams & { search?: string; status?: string; ticketType?: string }): Promise<{ data: Ticket[]; pagination: PaginationMeta }> {

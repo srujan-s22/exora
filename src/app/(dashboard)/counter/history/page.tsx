@@ -27,6 +27,7 @@ export default function SalesHistoryPage() {
   const [page, setPage] = React.useState(1);
   const [totalPages, setTotalPages] = React.useState(1);
   const [totalItems, setTotalItems] = React.useState(0);
+  const [saleType, setSaleType] = React.useState<'general' | 'ride'>('general');
   
   const [exhibitions, setExhibitions] = React.useState<any[]>([]);
   const [exhibitionId, setExhibitionId] = React.useState('');
@@ -73,7 +74,8 @@ export default function SalesHistoryPage() {
       if (exhibitionId) queryParams.append('exhibitionId', exhibitionId);
       if (paymentMethod) queryParams.append('paymentMethod', paymentMethod);
 
-      const res = await fetch(`/api/sales?${queryParams.toString()}`);
+      const endpoint = saleType === 'ride' ? '/api/rides/sales' : '/api/sales';
+      const res = await fetch(`${endpoint}?${queryParams.toString()}`);
       if (res.ok) {
         const body = await res.json();
         if (body.success) {
@@ -98,14 +100,14 @@ export default function SalesHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, exhibitionId, paymentMethod, addToast]);
+  }, [page, exhibitionId, paymentMethod, saleType, addToast]);
 
   React.useEffect(() => {
     if (user && (user.role === 'counter' || user.role === 'admin')) {
       loadExhibitions();
       loadSalesHistory();
     }
-  }, [user, page, exhibitionId, paymentMethod, loadExhibitions, loadSalesHistory]);
+  }, [user, page, exhibitionId, paymentMethod, saleType, loadExhibitions, loadSalesHistory]);
 
   const handleReprint = async (sale: any) => {
     if (!sale.tickets || sale.tickets.length === 0) {
@@ -122,12 +124,13 @@ export default function SalesHistoryPage() {
 
     try {
       // Fetch dynamic QRs for all tickets in parallel
-      const promises = sale.tickets.map((tId: string) =>
-        fetch(`/api/tickets/${tId}`).then((r) => {
+      const promises = sale.tickets.map((t: any) => {
+        const tId = typeof t === 'string' ? t : (t._id || t.id);
+        return fetch(`/api/tickets/${tId}`).then((r) => {
           if (!r.ok) throw new Error();
           return r.json();
-        })
-      );
+        });
+      });
 
       const responses = await Promise.all(promises);
       const tickets = responses.filter((r) => r.success).map((r) => r.data);
@@ -163,7 +166,12 @@ export default function SalesHistoryPage() {
     {
       key: 'ticketType',
       label: 'Class',
-      render: (v: any) => <span className="capitalize font-semibold text-gray-300">{v || 'General'}</span>,
+      render: (v: any, row: any) => {
+        if (row.rideId) {
+          return <span className="font-semibold text-accent-300">{row.rideId.name || 'Ride'}</span>;
+        }
+        return <span className="capitalize font-semibold text-gray-300">{v || 'General'}</span>;
+      },
     },
     {
       key: 'ticketCount',
@@ -226,6 +234,36 @@ export default function SalesHistoryPage() {
         description="View past sales transactions and print duplicate receipts."
         showDivider
       />
+
+      {/* Sales Category Tabs */}
+      <div className="flex border-b border-gray-850 mb-6 gap-2 select-none">
+        <button
+          onClick={() => {
+            setSaleType('general');
+            setPage(1);
+          }}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            saleType === 'general'
+              ? 'border-accent-500 text-accent-300 font-bold'
+              : 'border-transparent text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          General Ticket Sales
+        </button>
+        <button
+          onClick={() => {
+            setSaleType('ride');
+            setPage(1);
+          }}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            saleType === 'ride'
+              ? 'border-accent-500 text-accent-300 font-bold'
+              : 'border-transparent text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          Ride Ticket Sales
+        </button>
+      </div>
 
       {/* Filter and search toolbar */}
       <div className="flex flex-col md:flex-row gap-4 mb-6 bg-gray-900 border border-gray-800 p-4 rounded-xl items-end">
@@ -371,7 +409,11 @@ export default function SalesHistoryPage() {
                 ticketNumber={createdTickets[currentTicketIndex]?.ticketNumber}
                 qrPayload={createdTickets[currentTicketIndex]?.qrPayload || ''}
                 qrDataUrl={createdQrDataUrls[currentTicketIndex]}
-                ticketType={createdTickets[currentTicketIndex]?.ticketType}
+                ticketType={
+                  createdTickets[currentTicketIndex]?.ticketType === 'ride'
+                    ? (createdTickets[currentTicketIndex]?.rideId?.name || 'Ride')
+                    : (createdTickets[currentTicketIndex]?.ticketType || 'General')
+                }
                 price={createdTickets[currentTicketIndex]?.price}
                 exhibitionName={activeExhibitionName}
               />
@@ -385,7 +427,11 @@ export default function SalesHistoryPage() {
                     ticketNumber={ticket.ticketNumber}
                     qrPayload={ticket.qrPayload || ''}
                     qrDataUrl={createdQrDataUrls[idx]}
-                    ticketType={ticket.ticketType}
+                    ticketType={
+                      ticket.ticketType === 'ride'
+                        ? (ticket.rideId?.name || 'Ride')
+                        : (ticket.ticketType || 'General')
+                    }
                     price={ticket.price}
                     exhibitionName={activeExhibitionName}
                   />

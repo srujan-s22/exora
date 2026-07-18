@@ -653,6 +653,7 @@ export const RideService = {
       .skip(skip)
       .limit(limit)
       .populate('rideId', 'name price')
+      .populate('exhibitionId', 'name venue')
       .populate('soldBy', 'name staffId')
       .populate('tickets', 'ticketNumber status');
 

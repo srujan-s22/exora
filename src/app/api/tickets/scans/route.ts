@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
     }
 
-    if (user.role !== 'admin' && user.role !== 'gate') {
+    if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'gate') {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20', 10);
 
     // Gate staff is scoped to their own shift scans
-    const scannedBy = user.role !== 'admin' ? user.id : (searchParams.get('scannedBy') || undefined);
+    const scannedBy = (user.role !== 'admin' && user.role !== 'super_admin') ? user.id : (searchParams.get('scannedBy') || undefined);
 
     const result = await TicketService.listScans({
       page,

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
     const user = await AuthService.verifyToken(token);
-    if (!user || (user.role !== 'counter' && user.role !== 'admin')) {
+    if (!user || (user.role !== 'counter' && user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('FORBIDDEN', 'Access Denied: Ticket sales restricted to counters and admins.', 403);
     }
 

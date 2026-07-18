@@ -22,10 +22,14 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
     }
 
+    if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'counter') {
+      return errorResponse('FORBIDDEN', 'Access denied', 403);
+    }
+
     const { searchParams } = new URL(req.url);
     const rideId = searchParams.get('rideId') || undefined;
     const exhibitionId = searchParams.get('exhibitionId') || undefined;
-    const soldBy = searchParams.get('soldBy') || undefined;
+    const soldBy = user.role !== 'admin' && user.role !== 'super_admin' ? user.id : (searchParams.get('soldBy') || undefined);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
 

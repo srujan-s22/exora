@@ -54,7 +54,7 @@ export async function PUT(
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
     const user = await AuthService.verifyToken(token);
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('FORBIDDEN', 'Only administrators can update rides', 403);
     }
 

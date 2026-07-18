@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)));
 
     // Non-admins can only see their own tickets
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'super_admin') {
       const result = await TicketService.listBySeller(user.id, { page, limit });
       return successResponse(result);
     }
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
     const user = await AuthService.verifyToken(token);
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('FORBIDDEN', 'Only administrators can create tickets via this endpoint', 403);
     }
 
