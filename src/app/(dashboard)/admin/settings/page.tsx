@@ -77,8 +77,8 @@ export default function SettingsPage() {
         }
       }
 
-      // 2. Fetch System Settings (only for Admins)
-      if (authUser?.role === 'admin') {
+      // 2. Fetch System Settings (only for Super Admins)
+      if (authUser?.role === 'super_admin') {
         const settingsRes = await fetch('/api/admin/settings');
         if (settingsRes.ok) {
           const settingsBody = await settingsRes.json();
@@ -278,7 +278,7 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: 'profile', label: 'My Profile', icon: <User size={15} /> },
-    ...(authUser?.role === 'admin' ? [{ id: 'system', label: 'System Configuration', icon: <Settings size={15} /> }] : []),
+    ...(authUser?.role === 'super_admin' ? [{ id: 'system', label: 'System Configuration', icon: <Settings size={15} /> }] : []),
     { id: 'client', label: 'Preferences', icon: <Monitor size={15} /> },
   ] as const;
 
@@ -409,8 +409,8 @@ export default function SettingsPage() {
             </Card>
           )}
 
-          {/* SYSTEM TAB (Admin only) */}
-          {activeTab === 'system' && authUser?.role === 'admin' && (
+          {/* SYSTEM TAB (Super Admin only) */}
+          {activeTab === 'system' && authUser?.role === 'super_admin' && (
             <Card className="border border-gray-800 bg-gray-900/50 shadow-xl">
               <CardHeader className="border-b border-gray-850 pb-4">
                 <CardTitle className="text-base flex items-center gap-2">

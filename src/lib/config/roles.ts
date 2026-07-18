@@ -114,7 +114,7 @@ export const PERMISSIONS = {
 
   // Settings
   'settings.read': ['super_admin', 'admin'],
-  'settings.update': ['super_admin', 'admin'],
+  'settings.update': ['super_admin'],
 
   // User management (new)
   'user.create': ['super_admin', 'admin'],

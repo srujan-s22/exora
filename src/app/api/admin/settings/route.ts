@@ -20,7 +20,7 @@ const updateSettingsSchema = z.object({
 
 /**
  * GET /api/admin/settings
- * Fetch system settings. Admin only.
+ * Fetch system settings. Super Admin only.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
     const currentUser = await AuthService.verifyToken(token);
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!currentUser || currentUser.role !== 'super_admin') {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * PATCH /api/admin/settings
- * Update system settings. Admin only.
+ * Update system settings. Super Admin only.
  */
 export async function PATCH(req: NextRequest) {
   try {
@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
     const currentUser = await AuthService.verifyToken(token);
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!currentUser || currentUser.role !== 'super_admin') {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
