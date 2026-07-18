@@ -37,6 +37,14 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               ${error ? 'border-error/80 focus:border-error focus:ring-error/20' : 'border-gray-700/80 hover:border-gray-600 focus:border-accent-500'}
               ${className}
             `}
+            onWheel={(e) => {
+              if (type === 'number') {
+                e.currentTarget.blur();
+              }
+              if (props.onWheel) {
+                props.onWheel(e);
+              }
+            }}
             {...props}
           />
           {rightIcon && (

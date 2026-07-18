@@ -236,3 +236,13 @@ body {
 .animate-laser {
   animation: laser-sweep 2s ease-in-out infinite;
 }
+
+/* Hide browser default number spinner arrows */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
