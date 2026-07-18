@@ -70,7 +70,7 @@ export const SaleService = {
   async getStats(exhibitionId?: string, dateRange?: { start: Date; end: Date }): Promise<SaleStats> {
     await connectToDatabase();
 
-    const match: Record<string, any> = {};
+    const match: Record<string, any> = { status: { $ne: 'cancelled' } };
     if (exhibitionId) {
       match.exhibitionId = new mongoose.Types.ObjectId(exhibitionId);
     }
@@ -113,7 +113,10 @@ export const SaleService = {
   async getStaffSalesStats(staffId: string, dateRange?: { start: Date; end: Date }): Promise<SaleStats> {
     await connectToDatabase();
 
-    const match: Record<string, any> = { soldBy: new mongoose.Types.ObjectId(staffId) };
+    const match: Record<string, any> = {
+      soldBy: new mongoose.Types.ObjectId(staffId),
+      status: { $ne: 'cancelled' },
+    };
     if (dateRange) {
       match.soldAt = { $gte: dateRange.start, $lte: dateRange.end };
     }

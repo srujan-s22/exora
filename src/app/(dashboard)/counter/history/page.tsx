@@ -16,6 +16,199 @@ import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui/spinner';
 import { Printer, RefreshCw } from 'lucide-react';
 
+interface CancelTransactionButtonProps {
+  row: any;
+  saleType: 'general' | 'ride';
+  onCancelled: () => void;
+}
+
+function CancelTransactionButton({ row, saleType, onCancelled }: CancelTransactionButtonProps) {
+  const { addToast } = useToast();
+  const [timeLeft, setTimeLeft] = React.useState<number>(0);
+  const [showConfirmModal, setShowConfirmModal] = React.useState(false);
+  const [reason, setReason] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
+
+  const windowSeconds = row.cancellationWindowSeconds || 30;
+  const soldAtTime = new Date(row.soldAt).getTime();
+
+  React.useEffect(() => {
+    if (row.status === 'cancelled') {
+      return;
+    }
+
+    const calculateTimeLeft = () => {
+      const elapsed = Math.floor((Date.now() - soldAtTime) / 1000);
+      const remaining = windowSeconds - elapsed;
+      return Math.max(0, remaining);
+    };
+
+    setTimeLeft(calculateTimeLeft());
+
+    const timer = setInterval(() => {
+      const remaining = calculateTimeLeft();
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [soldAtTime, windowSeconds, row.status]);
+
+  const handleCancelSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reason.trim()) {
+      addToast({
+        type: 'warning',
+        title: 'Reason Required',
+        message: 'Please select a reason.',
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const endpoint = saleType === 'ride' 
+        ? `/api/rides/sales/${row.id}/cancel` 
+        : `/api/sales/${row.id}/cancel`;
+        
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+
+      const body = await res.json();
+      if (res.ok && body.success) {
+        addToast({
+          type: 'success',
+          title: 'Transaction Cancelled',
+          message: 'The transaction has been successfully cancelled.',
+        });
+        setShowConfirmModal(false);
+        onCancelled();
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Cancellation Failed',
+          message: body.error?.message || 'Failed to cancel.',
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Could not connect to the server.',
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (row.status === 'cancelled') {
+    return (
+      <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold bg-error/15 text-error">
+        Voided
+      </span>
+    );
+  }
+
+  if (timeLeft <= 0) {
+    return (
+      <span className="text-xs text-gray-500 font-semibold select-none">
+        Locked
+      </span>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex flex-col gap-1 items-start">
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={() => {
+            setReason('');
+            setShowConfirmModal(true);
+          }}
+          className="text-[10px] py-1 px-2.5 font-bold uppercase tracking-wider bg-error hover:bg-error/95"
+        >
+          Cancel Sale
+        </Button>
+        <span className="text-[10px] font-mono text-warning-400 select-none animate-pulse">
+          Void (00:{timeLeft.toString().padStart(2, '0')})
+        </span>
+      </div>
+
+      <Modal
+        open={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        title="Confirm Void Transaction"
+      >
+        <form onSubmit={handleCancelSubmit} className="space-y-4">
+          <div className="text-sm text-gray-300 space-y-2">
+            <p>Are you sure you want to void transaction <span className="font-mono text-gray-150 font-bold">{row.transactionId}</span>?</p>
+            <div className="bg-gray-950 p-3 rounded-lg border border-gray-800 space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-400 text-xs">Total Amount:</span>
+                <span className="font-bold text-gray-200">₹{row.totalAmount / 100}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400 text-xs">Quantity:</span>
+                <span className="font-bold text-gray-200">{row.ticketCount} tickets</span>
+              </div>
+            </div>
+            <p className="text-xs text-error font-medium">This action cannot be undone. All tickets will be soft-deleted/cancelled.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Cancellation Reason</label>
+            <select
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent-500"
+            >
+              <option value="">-- Select a reason --</option>
+              <option value="Issued 4 instead of 3">Issued 4 instead of 3</option>
+              <option value="Wrong ticket quantity">Wrong ticket quantity</option>
+              <option value="Duplicate transaction">Duplicate transaction</option>
+              <option value="Other">Other / Typo correction</option>
+            </select>
+
+            {reason === 'Other' && (
+              <Input
+                placeholder="Enter custom cancellation notes..."
+                onChange={(e) => setReason(e.target.value)}
+                className="mt-2 text-sm"
+              />
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-gray-850">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowConfirmModal(false)}
+            >
+              Close
+            </Button>
+            <Button
+              type="submit"
+              variant="danger"
+              isLoading={submitting}
+              disabled={!reason}
+            >
+              Confirm Void
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  );
+}
+
 export default function SalesHistoryPage() {
   const { addToast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
@@ -201,17 +394,29 @@ export default function SalesHistoryPage() {
       ),
     },
     {
+      key: 'status',
+      label: 'Status / Void',
+      render: (_v: any, row: any) => (
+        <CancelTransactionButton
+          row={row}
+          saleType={saleType}
+          onCancelled={loadSalesHistory}
+        />
+      ),
+    },
+    {
       key: 'actions',
       label: 'Reprint',
       render: (_v: any, row: any) => (
         <Button
           variant="secondary"
           size="sm"
+          disabled={row.status === 'cancelled'}
           onClick={() => handleReprint(row)}
           isLoading={reprintLoadingId === row.id}
           leftIcon={<Printer size={12} />}
         >
-          Reprint
+          {row.status === 'cancelled' ? 'Voided' : 'Reprint'}
         </Button>
       ),
     },

@@ -270,40 +270,52 @@ export default function ReportsPage() {
         {/* Tab 1: Sales & Revenue */}
         {activeTab === 'sales' && data && (
           <div className="grid gap-6">
-            <div className="grid gap-4.5 sm:grid-cols-3">
+            <div className="grid gap-4.5 sm:grid-cols-4">
               <Card className="bg-gray-900 border border-gray-800">
                 <CardHeader className="py-3 border-b border-gray-850">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400">Total Ticket Value</CardTitle>
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400">Gross Ticket Value</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  <h3 className="text-2xl font-black text-gray-105">
-                    ₹{(data.stats.totalRevenue / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  <h3 className="text-2xl font-black text-gray-100">
+                    ₹{((data.stats.grossRevenue || data.stats.totalRevenue) / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                   </h3>
-                  <p className="text-[10px] text-gray-500 mt-1">Gross sales generated via Ticketing Counters</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Total revenue generated before voids/cancellations</p>
                 </CardContent>
               </Card>
 
               <Card className="bg-gray-900 border border-gray-800">
                 <CardHeader className="py-3 border-b border-gray-850">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400">UPI Digital Volume</CardTitle>
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-accent-300">Net Active Sales</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <h3 className="text-2xl font-black text-accent-300">
+                    ₹{(data.stats.totalRevenue / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </h3>
+                  <p className="text-[10px] text-gray-500 mt-1">Realizable ticketing income (excluding voided sales)</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gray-900 border border-gray-800">
+                <CardHeader className="py-3 border-b border-gray-850">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-error">Voided / Cancelled Value</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <h3 className="text-2xl font-black text-error">
+                    ₹{((data.stats.cancelledRevenue || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </h3>
+                  <p className="text-[10px] text-gray-500 mt-1">Voided from {data.stats.cancelledTickets || 0} tickets within time window</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gray-900 border border-gray-800">
+                <CardHeader className="py-3 border-b border-gray-850">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400">UPI Share (Active)</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
                   <h3 className="text-2xl font-black text-gray-105">
                     ₹{(data.paymentBreakdown.upiRevenue / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                   </h3>
-                  <p className="text-[10px] text-gray-500 mt-1">Processed from {data.paymentBreakdown.upiTickets} tickets via QR checkouts</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-900 border border-gray-800">
-                <CardHeader className="py-3 border-b border-gray-850">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400">Cash Ledger Volume</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <h3 className="text-2xl font-black text-gray-105">
-                    ₹{(data.paymentBreakdown.cashRevenue / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                  </h3>
-                  <p className="text-[10px] text-gray-500 mt-1">Collected from {data.paymentBreakdown.cashTickets} cash transactions</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Active digital checkout from {data.paymentBreakdown.upiTickets} tickets</p>
                 </CardContent>
               </Card>
             </div>
@@ -325,22 +337,34 @@ export default function ReportsPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-850">
                     <tr className="hover:bg-gray-850/10">
-                      <td className="px-6 py-4 font-semibold text-gray-100">UPI Online Channel</td>
+                      <td className="px-6 py-4 font-semibold text-gray-100">UPI Online Channel (Active)</td>
                       <td className="px-6 py-4 text-center font-mono">{data.paymentBreakdown.upiTickets}</td>
                       <td className="px-6 py-4 text-right font-mono font-bold">₹{data.paymentBreakdown.upiRevenue / 100}</td>
                       <td className="px-6 py-4 text-right font-mono">₹{data.paymentBreakdown.upiTickets > 0 ? (data.paymentBreakdown.upiRevenue / data.paymentBreakdown.upiTickets / 100).toFixed(0) : 0}</td>
                     </tr>
                     <tr className="hover:bg-gray-850/10">
-                      <td className="px-6 py-4 font-semibold text-gray-100">Cash Counter Desk</td>
+                      <td className="px-6 py-4 font-semibold text-gray-100">Cash Counter Desk (Active)</td>
                       <td className="px-6 py-4 text-center font-mono">{data.paymentBreakdown.cashTickets}</td>
                       <td className="px-6 py-4 text-right font-mono font-bold">₹{data.paymentBreakdown.cashRevenue / 100}</td>
                       <td className="px-6 py-4 text-right font-mono">₹{data.paymentBreakdown.cashTickets > 0 ? (data.paymentBreakdown.cashRevenue / data.paymentBreakdown.cashTickets / 100).toFixed(0) : 0}</td>
                     </tr>
-                    <tr className="bg-gray-850/30 font-bold border-t border-gray-700">
-                      <td className="px-6 py-4 text-gray-150">Aggregate Total Summary</td>
-                      <td className="px-6 py-4 text-center font-mono text-gray-150">{data.stats.ticketsSold}</td>
-                      <td className="px-6 py-4 text-right font-mono text-accent-300">₹{data.stats.totalRevenue / 100}</td>
-                      <td className="px-6 py-4 text-right font-mono text-gray-150">₹{data.stats.ticketsSold > 0 ? (data.stats.totalRevenue / data.stats.ticketsSold / 100).toFixed(0) : 0}</td>
+                    <tr className="hover:bg-gray-850/10 text-error bg-error/5">
+                      <td className="px-6 py-4 font-semibold">Voided / Cancelled Sales</td>
+                      <td className="px-6 py-4 text-center font-mono">{data.stats.cancelledTickets || 0}</td>
+                      <td className="px-6 py-4 text-right font-mono font-bold">₹{(data.stats.cancelledRevenue || 0) / 100}</td>
+                      <td className="px-6 py-4 text-right font-mono">₹{data.stats.cancelledTickets > 0 ? ((data.stats.cancelledRevenue || 0) / data.stats.cancelledTickets / 100).toFixed(0) : 0}</td>
+                    </tr>
+                    <tr className="hover:bg-gray-850/10 bg-gray-850/20 font-bold border-t border-gray-800">
+                      <td className="px-6 py-4 text-gray-100">Net Active Totals</td>
+                      <td className="px-6 py-4 text-center font-mono">{data.stats.ticketsSold}</td>
+                      <td className="px-6 py-4 text-right font-mono font-bold text-accent-300">₹{data.stats.totalRevenue / 100}</td>
+                      <td className="px-6 py-4 text-right font-mono">₹{data.stats.ticketsSold > 0 ? (data.stats.totalRevenue / data.stats.ticketsSold / 100).toFixed(0) : 0}</td>
+                    </tr>
+                    <tr className="bg-gray-850/40 font-bold border-t border-gray-700">
+                      <td className="px-6 py-4 text-gray-150">Gross Ticketing Volume (Incl. Cancelled)</td>
+                      <td className="px-6 py-4 text-center font-mono text-gray-150">{data.stats.grossTickets || data.stats.ticketsSold}</td>
+                      <td className="px-6 py-4 text-right font-mono text-accent-400">₹{(data.stats.grossRevenue || data.stats.totalRevenue) / 100}</td>
+                      <td className="px-6 py-4 text-right font-mono text-gray-150">₹{(data.stats.grossTickets || data.stats.ticketsSold) > 0 ? ((data.stats.grossRevenue || data.stats.totalRevenue) / (data.stats.grossTickets || data.stats.ticketsSold) / 100).toFixed(0) : 0}</td>
                     </tr>
                   </tbody>
                 </table>

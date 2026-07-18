@@ -6,6 +6,7 @@ export interface ISystemSettings extends Document {
   defaultTicketValidity: number; // in hours
   ticketPrefix: string;
   maxScansPerTicket: number;
+  cancellationWindowSeconds: number;
   updatedBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +44,12 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
       required: true,
       default: 1,
       min: 1,
+    },
+    cancellationWindowSeconds: {
+      type: Number,
+      required: true,
+      default: 30,
+      min: 5,
     },
     updatedBy: {
       type: Schema.Types.ObjectId,

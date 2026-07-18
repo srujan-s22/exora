@@ -45,6 +45,7 @@ export default function SettingsPage() {
     defaultTicketValidity: 24,
     ticketPrefix: 'EXH',
     maxScansPerTicket: 1,
+    cancellationWindowSeconds: 30,
     lastUpdatedBy: '',
     lastUpdatedAt: '',
   });
@@ -90,6 +91,7 @@ export default function SettingsPage() {
               defaultTicketValidity: s.defaultTicketValidity,
               ticketPrefix: s.ticketPrefix,
               maxScansPerTicket: s.maxScansPerTicket,
+              cancellationWindowSeconds: s.cancellationWindowSeconds || 30,
               lastUpdatedBy: s.updatedBy?.name ? `${s.updatedBy.name} (${s.updatedBy.staffId})` : 'System',
               lastUpdatedAt: new Date(s.updatedAt).toLocaleDateString('en-IN', {
                 day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -211,6 +213,7 @@ export default function SettingsPage() {
       errors.ticketPrefix = 'Prefix must be under 10 characters';
     }
     if (systemForm.maxScansPerTicket < 1) errors.maxScansPerTicket = 'Must be at least 1 scan';
+    if (systemForm.cancellationWindowSeconds < 5) errors.cancellationWindowSeconds = 'Must be at least 5 seconds';
 
     if (Object.keys(errors).length > 0) {
       setSystemErrors(errors);
@@ -453,7 +456,7 @@ export default function SettingsPage() {
                       <Lock size={12} className="text-accent-400" />
                       <span>Ticketing Policies</span>
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                       <Input
                         label="Ticket ID Prefix"
                         value={systemForm.ticketPrefix}
@@ -479,6 +482,15 @@ export default function SettingsPage() {
                         error={systemErrors.maxScansPerTicket}
                         leftIcon={<Info size={14} />}
                         helperText="Number of gate entries allowed"
+                      />
+                      <Input
+                        label="Cancellation Window (Sec)"
+                        type="number"
+                        value={systemForm.cancellationWindowSeconds}
+                        onChange={(e) => setSystemForm((p) => ({ ...p, cancellationWindowSeconds: Math.max(5, parseInt(e.target.value) || 0) }))}
+                        error={systemErrors.cancellationWindowSeconds}
+                        leftIcon={<RefreshCw size={14} />}
+                        helperText="Time frame to void a transaction"
                       />
                     </div>
                   </div>

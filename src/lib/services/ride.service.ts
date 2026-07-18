@@ -678,10 +678,10 @@ export const RideService = {
     const ride = await RideModel.findById(rideId);
     if (!ride) throw new Error('Ride not found');
 
-    const ticketsSold = await RideTicketModel.countDocuments({ rideId: rideObjectId });
+    const ticketsSold = await RideTicketModel.countDocuments({ rideId: rideObjectId, status: { $ne: 'cancelled' } });
 
     const revenueResult = await RideSaleModel.aggregate([
-      { $match: { rideId: rideObjectId } },
+      { $match: { rideId: rideObjectId, status: { $ne: 'cancelled' } } },
       { $group: { _id: null, total: { $sum: '$totalAmount' } } },
     ]);
     const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
@@ -721,6 +721,7 @@ export const RideService = {
     const todayTicketsCount = await RideTicketModel.countDocuments({
       rideId: rideObjectId,
       createdAt: { $gte: startOfToday, $lte: endOfToday },
+      status: { $ne: 'cancelled' },
     });
 
     const todayScans = await RideScanModel.find({

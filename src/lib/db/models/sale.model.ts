@@ -20,10 +20,31 @@ export interface ISale extends Document {
   paymentStatus?: 'pending' | 'paid' | 'free';
   cashReceived?: number; // in paise
   changeGiven?: number; // in paise
+  status?: 'active' | 'cancelled';
+  cancelledAt?: Date;
+  cancelledBy?: mongoose.Types.ObjectId;
+  cancelReason?: string;
+  cancellationWindowSeconds?: number;
 }
 
 const SaleSchema = new Schema<ISale>(
   {
+    status: {
+      type: String,
+      enum: ['active', 'cancelled'],
+      default: 'active',
+      required: true,
+    },
+    cancelledAt: Date,
+    cancelledBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    cancelReason: String,
+    cancellationWindowSeconds: {
+      type: Number,
+      default: 30,
+    },
     transactionId: {
       type: String,
       required: true,

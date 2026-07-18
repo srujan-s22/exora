@@ -16,6 +16,7 @@ const updateSettingsSchema = z.object({
   defaultTicketValidity: z.number().min(1, 'Validity must be at least 1 hour').max(8760).optional(),
   ticketPrefix: z.string().min(1, 'Prefix cannot be empty').max(10).trim().uppercase().optional(),
   maxScansPerTicket: z.number().min(1, 'Max scans must be at least 1').max(100).optional(),
+  cancellationWindowSeconds: z.number().min(5, 'Window must be at least 5 seconds').max(3600).optional(),
 });
 
 /**
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
         defaultTicketValidity: 24,
         ticketPrefix: 'EXH',
         maxScansPerTicket: 1,
+        cancellationWindowSeconds: 30,
         updatedBy: currentUser.id,
       });
       settings = await SystemSettings.findById(settings._id).populate('updatedBy', 'name staffId');
@@ -98,6 +100,7 @@ export async function PATCH(req: NextRequest) {
         defaultTicketValidity: 24,
         ticketPrefix: 'EXH',
         maxScansPerTicket: 1,
+        cancellationWindowSeconds: 30,
         updatedBy: currentUser.id,
       });
     }

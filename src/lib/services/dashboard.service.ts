@@ -14,8 +14,8 @@ export const DashboardService = {
   async getAdminMetrics(): Promise<Record<string, any>> {
     await connectToDatabase();
 
-    // 1. Fetch total sales and counts
-    const sales = await SaleModel.find({});
+    // 1. Fetch total active sales and counts
+    const sales = await SaleModel.find({ status: { $ne: 'cancelled' } });
     let totalRevenue = 0;
     let ticketsSold = 0;
     let cashRevenue = 0;
@@ -34,6 +34,18 @@ export const DashboardService = {
         upiTickets += s.ticketCount || 0;
       }
     }
+
+    // 1b. Fetch cancelled sales metrics for gross vs net comparison
+    const cancelledSales = await SaleModel.find({ status: 'cancelled' });
+    let cancelledRevenue = 0;
+    let cancelledTickets = 0;
+    for (const cs of cancelledSales) {
+      cancelledRevenue += cs.totalAmount || 0;
+      cancelledTickets += cs.ticketCount || 0;
+    }
+
+    const grossRevenue = totalRevenue + cancelledRevenue;
+    const grossTickets = ticketsSold + cancelledTickets;
 
     // 2. Scans logs aggregations
     const scans = await TicketScanModel.find({});
@@ -63,7 +75,7 @@ export const DashboardService = {
     const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
     const endOfYesterday = new Date(endOfToday.getTime() - 24 * 60 * 60 * 1000);
 
-    const todaySales = await SaleModel.find({ soldAt: { $gte: startOfToday, $lte: endOfToday } });
+    const todaySales = await SaleModel.find({ soldAt: { $gte: startOfToday, $lte: endOfToday }, status: { $ne: 'cancelled' } });
     let todayRevenue = 0;
     let todayTickets = 0;
     for (const s of todaySales) {
@@ -71,7 +83,7 @@ export const DashboardService = {
       todayTickets += s.ticketCount || 0;
     }
 
-    const yesterdaySales = await SaleModel.find({ soldAt: { $gte: startOfYesterday, $lte: endOfYesterday } });
+    const yesterdaySales = await SaleModel.find({ soldAt: { $gte: startOfYesterday, $lte: endOfYesterday }, status: { $ne: 'cancelled' } });
     let yesterdayRevenue = 0;
     for (const s of yesterdaySales) {
       yesterdayRevenue += s.totalAmount || 0;
@@ -90,8 +102,8 @@ export const DashboardService = {
     const allExhibitions = await ExhibitionModel.find({ archive: { $ne: true } }).sort({ createdAt: -1 });
     
     for (const exh of allExhibitions) {
-      const soldCount = await TicketModel.countDocuments({ exhibitionId: exh._id });
-      const exhSales = await SaleModel.find({ exhibitionId: exh._id });
+      const soldCount = await TicketModel.countDocuments({ exhibitionId: exh._id, status: { $ne: 'cancelled' } });
+      const exhSales = await SaleModel.find({ exhibitionId: exh._id, status: { $ne: 'cancelled' } });
       const rev = exhSales.reduce((acc, curr) => acc + (curr.totalAmount || 0), 0);
       const admitted = await TicketScanModel.countDocuments({ exhibitionId: exh._id, result: 'admitted' });
 
@@ -125,6 +137,10 @@ export const DashboardService = {
       stats: {
         totalRevenue,
         ticketsSold,
+        grossRevenue,
+        grossTickets,
+        cancelledRevenue,
+        cancelledTickets,
         validEntries,
         invalidScans,
         activeExhibitionsCount,
@@ -162,6 +178,7 @@ export const DashboardService = {
     const match: Record<string, any> = {
       soldBy: new mongoose.Types.ObjectId(userId),
       soldAt: { $gte: startOfToday, $lte: endOfToday },
+      status: { $ne: 'cancelled' },
     };
 
     const sales = await SaleModel.find(match);

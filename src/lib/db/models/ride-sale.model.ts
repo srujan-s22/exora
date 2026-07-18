@@ -18,10 +18,31 @@ export interface IRideSale extends Document {
   paymentStatus?: 'pending' | 'paid';
   cashReceived?: number; // in paise
   changeGiven?: number; // in paise
+  status?: 'active' | 'cancelled';
+  cancelledAt?: Date;
+  cancelledBy?: mongoose.Types.ObjectId;
+  cancelReason?: string;
+  cancellationWindowSeconds?: number;
 }
 
 const RideSaleSchema = new Schema<IRideSale>(
   {
+    status: {
+      type: String,
+      enum: ['active', 'cancelled'],
+      default: 'active',
+      required: true,
+    },
+    cancelledAt: Date,
+    cancelledBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    cancelReason: String,
+    cancellationWindowSeconds: {
+      type: Number,
+      default: 30,
+    },
     transactionId: {
       type: String,
       required: true,
