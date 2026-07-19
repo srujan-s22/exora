@@ -132,6 +132,14 @@ export default function SettingsPage() {
     if (profileForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileForm.email)) {
       errors.email = 'Invalid email address';
     }
+    if (profileForm.newPassword || profileForm.currentPassword) {
+      if (!profileForm.currentPassword) {
+        errors.currentPassword = 'Current password is required';
+      }
+      if (!profileForm.newPassword) {
+        errors.newPassword = 'New password is required';
+      }
+    }
     if (profileForm.newPassword) {
       if (profileForm.newPassword.length < 8) {
         errors.newPassword = 'Password must be at least 8 characters';
@@ -157,12 +165,13 @@ export default function SettingsPage() {
     setProfileErrors({});
 
     try {
-      const payload: Record<string, any> = {
+      const payload: Record<string, string> = {
         name: profileForm.name.trim(),
         email: profileForm.email.trim() || '',
       };
       if (profileForm.newPassword) {
         payload.password = profileForm.newPassword;
+        payload.currentPassword = profileForm.currentPassword;
       }
 
       const res = await fetch('/api/profile', {
@@ -173,6 +182,10 @@ export default function SettingsPage() {
 
       const body = await res.json();
       if (!res.ok || !body.success) {
+        if (body.error?.code === 'INVALID_PASSWORD') {
+          setProfileErrors({ currentPassword: body.error.message || 'Current password is incorrect' });
+          return;
+        }
         throw new Error(body.error?.message || 'Failed to update profile');
       }
 
@@ -376,6 +389,16 @@ export default function SettingsPage() {
                     <p className="text-xs text-gray-400">
                       Leave these fields empty if you do not want to change your current password.
                     </p>
+
+                    <Input
+                      label="Current Password"
+                      placeholder="••••••••"
+                      type="password"
+                      value={profileForm.currentPassword}
+                      onChange={(e) => setProfileForm((p) => ({ ...p, currentPassword: e.target.value }))}
+                      error={profileErrors.currentPassword}
+                      leftIcon={<Lock size={14} />}
+                    />
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
