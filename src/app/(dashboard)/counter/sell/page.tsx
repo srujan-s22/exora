@@ -210,7 +210,7 @@ export default function SellTicketsPage() {
   if (activeExhibitions.length === 0) {
     return (
       <ContentWrapper>
-        <PageHeader title="Rapid POS Ticket Desk" description="Rapid ticket issuance terminal." showDivider />
+        <PageHeader title="Ticket Counter Desk" description="Fast ticket issuing counter." showDivider />
         <div className="mx-auto max-w-lg mt-12 p-8 text-center bg-gray-900 border border-gray-800 rounded-xl">
           <div className="flex justify-center text-warning mb-4">
             <AlertCircle size={48} />
@@ -227,8 +227,8 @@ export default function SellTicketsPage() {
   return (
     <ContentWrapper>
       <PageHeader
-        title="Rapid Sales Terminal"
-        description="Focused single-terminal mode optimized for ticketing sales checkouts."
+        title="Ticket Counter Desk"
+        description="Quick checkout for ticket sales."
         showDivider
       />
 

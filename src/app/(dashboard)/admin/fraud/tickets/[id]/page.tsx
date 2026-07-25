@@ -63,10 +63,10 @@ export default function TicketForensicsPage({ params }: { params: Promise<{ id: 
       <ContentWrapper>
         <div className="py-12 text-center text-gray-500">
           <ShieldAlert size={48} className="mx-auto text-red-500 mb-4" />
-          <h2 className="text-lg font-bold text-gray-150">Forensics Record Not Found</h2>
+          <h2 className="text-lg font-bold text-gray-150">Ticket Record Not Found</h2>
           <p className="text-sm text-gray-400 mt-2">The ticket identifier '{ticketRef}' does not correspond to any registered credentials.</p>
           <Link href="/admin/fraud" className="mt-6 inline-flex items-center gap-1.5 text-xs text-accent-300 font-bold hover:underline">
-            <ArrowLeft size={12} /> Return to security command center
+            <ArrowLeft size={12} /> Return to security alerts
           </Link>
         </div>
       </ContentWrapper>
@@ -86,8 +86,8 @@ export default function TicketForensicsPage({ params }: { params: Promise<{ id: 
 
       {/* Page Header */}
       <PageHeader
-        title={`Forensics Investigation: ${ticket.ticketNumber}`}
-        description="Comprehensive life cycle timeline tracking ticket generation parameters, counter purchase ledger audits, and gate checks."
+        title={`Ticket History & Verification: ${ticket.ticketNumber}`}
+        description="Complete timeline tracking ticket details, purchase information, and gate check history."
         showDivider
       />
 
@@ -100,13 +100,17 @@ export default function TicketForensicsPage({ params }: { params: Promise<{ id: 
             <CardHeader className="py-4 border-b border-gray-850">
               <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
                 <Ticket size={14} className="text-accent-300" />
-                <span>Ticket Parameters</span>
+                <span>Ticket Details</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-3.5 text-xs">
               <div className="flex justify-between border-b border-gray-850 pb-2">
                 <span className="text-gray-500">Ticket Class</span>
                 <span className="font-bold text-gray-150 capitalize">{ticket.ticketType}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-850 pb-2">
+                <span className="text-gray-500">Exhibition</span>
+                <span className="font-bold text-gray-150">{ticket.exhibitionName || 'Global Access'}</span>
               </div>
               <div className="flex justify-between border-b border-gray-850 pb-2">
                 <span className="text-gray-500">Price Paid</span>

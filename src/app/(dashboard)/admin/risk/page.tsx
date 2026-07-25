@@ -105,8 +105,8 @@ export default function RiskProfilesPage() {
     <ContentWrapper>
       {/* Page Header */}
       <PageHeader
-        title="Operations Risk Profiler"
-        description="Assesses risk indices for staff terminals and exhibitions using historical transaction frequencies."
+        title="Staff & Event Risk Overview"
+        description="Monitors risk levels for staff counters and events based on scan and sales patterns."
         actions={
           <Button
             variant="secondary"
@@ -143,7 +143,7 @@ export default function RiskProfilesPage() {
           <CardHeader className="py-4 border-b border-gray-850">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
               <ShieldAlert size={14} className="text-amber-500" />
-              <span>Operator Risk Index Assessments ({filteredStaff.length})</span>
+              <span>Staff Risk Assessments ({filteredStaff.length})</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -189,7 +189,7 @@ export default function RiskProfilesPage() {
           <CardHeader className="py-4 border-b border-gray-850">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
               <Scale size={14} className="text-accent-300" />
-              <span>Exhibitions Risk Profile Assessments ({filteredExhibitions.length})</span>
+              <span>Event Risk Assessments ({filteredExhibitions.length})</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">

@@ -108,8 +108,8 @@ export default function FraudDashboardPage() {
     <ContentWrapper>
       {/* Page Header */}
       <PageHeader
-        title="Fraud Audits & Anomaly Alerts"
-        description="Gate checkpoint security feeds, duplicate pass warning notifications, and transaction leakage checks."
+        title="Security & Fraud Alerts"
+        description="Real-time gate security updates, duplicate ticket warnings, and suspicious activity alerts."
         actions={
           <div className="flex gap-2">
             <Button
@@ -138,18 +138,18 @@ export default function FraudDashboardPage() {
         <div className="mb-6 p-4 rounded-xl border border-red-200 bg-red-50 text-red-800 flex flex-col gap-2 shadow-sm animate-pulse">
           <div className="flex items-center gap-2">
             <AlertTriangle className="text-red-600 shrink-0" size={18} />
-            <span className="font-extrabold text-sm uppercase tracking-wide">Critical Security Anomalies Flagged</span>
+            <span className="font-extrabold text-sm uppercase tracking-wide">Critical Security Alerts Flagged</span>
           </div>
           <ul className="list-disc list-inside text-xs pl-1.5 space-y-1 text-red-700">
             {overviewData?.securityViolationsCount > 0 && (
               <li>Detected <strong>{overviewData.securityViolationsCount}</strong> unauthorized password reset attempt(s) on Super Admin accounts.</li>
             )}
             {overviewData?.forgedAttempts > 0 && (
-              <li>Detected <strong>{overviewData.forgedAttempts}</strong> ticket QR codes with invalid cryptographic hashes (forgeries blocked).</li>
+              <li>Detected <strong>{overviewData.forgedAttempts}</strong> ticket QR codes with invalid security signatures (fake tickets blocked).</li>
             )}
             {highRiskExhibitions.map((e: any) => (
               <li key={e.exhibitionId}>
-                Exhibition <strong>{e.exhibitionName}</strong> has mismatch: Admitted scans exceed tickets sold by {e.mismatchCount} (possible gate bypass!).
+                Exhibition <strong>{e.exhibitionName}</strong> has mismatch: Gate scans exceed tickets sold by {e.mismatchCount} (extra gate entry detected).
               </li>
             ))}
           </ul>
@@ -201,7 +201,7 @@ export default function FraudDashboardPage() {
                 <UserX size={22} />
               </div>
               <div>
-                <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block">Counterfeit Blocked</span>
+                <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block">Fake Tickets Blocked</span>
                 <h3 className="text-2xl font-black text-red-600">{overviewData.forgedAttempts}</h3>
               </div>
             </CardContent>

@@ -45,9 +45,9 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
       items: [
         { label: 'Reports', href: '/admin/reports', icon: 'BarChart3' },
         { label: 'Fraud & Alerts', href: '/admin/fraud', icon: 'ShieldAlert' },
-        { label: 'Reconciliation', href: '/admin/reconciliation', icon: 'Scale' },
-        { label: 'Risk Profiling', href: '/admin/risk', icon: 'ShieldQuestion' },
-        { label: 'Audit Logs', href: '/admin/audit-logs', icon: 'ScrollText' },
+        { label: 'Sales vs Entry Check', href: '/admin/reconciliation', icon: 'Scale' },
+        { label: 'Risk Overview', href: '/admin/risk', icon: 'ShieldQuestion' },
+        { label: 'Activity Logs', href: '/admin/audit-logs', icon: 'ScrollText' },
       ],
     },
     {
@@ -84,9 +84,9 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
       items: [
         { label: 'Reports', href: '/admin/reports', icon: 'BarChart3' },
         { label: 'Fraud & Alerts', href: '/admin/fraud', icon: 'ShieldAlert' },
-        { label: 'Reconciliation', href: '/admin/reconciliation', icon: 'Scale' },
-        { label: 'Risk Profiling', href: '/admin/risk', icon: 'ShieldQuestion' },
-        { label: 'Audit Logs', href: '/admin/audit-logs', icon: 'ScrollText', requirePermission: 'canViewAuditLogs' },
+        { label: 'Sales vs Entry Check', href: '/admin/reconciliation', icon: 'Scale' },
+        { label: 'Risk Overview', href: '/admin/risk', icon: 'ShieldQuestion' },
+        { label: 'Activity Logs', href: '/admin/audit-logs', icon: 'ScrollText', requirePermission: 'canViewAuditLogs' },
       ],
     },
     {

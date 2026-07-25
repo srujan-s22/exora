@@ -293,7 +293,7 @@ export default function CounterDashboardPage() {
   if (activeExhibitions.length === 0) {
     return (
       <ContentWrapper>
-        <PageHeader title="Ticketing Counter Desk" description="Rapid ticket issuance terminal." showDivider />
+        <PageHeader title="Ticket Counter" description="Fast ticket issuing desk." showDivider />
         <div className="mx-auto max-w-lg mt-12 p-8 text-center bg-gray-900 border border-gray-800 rounded-xl">
           <div className="flex justify-center text-warning mb-4">
             <AlertCircle size={48} />
@@ -314,8 +314,8 @@ export default function CounterDashboardPage() {
     <ContentWrapper>
       {/* Page Header */}
       <PageHeader
-        title="Ticketing Counter Desk"
-        description="Process walk-in Cash and UPI ticket sales rapidly."
+        title="Ticket Counter"
+        description="Process walk-in Cash and UPI ticket sales quickly."
         showDivider
       />
 
@@ -327,7 +327,7 @@ export default function CounterDashboardPage() {
           icon="Ticket"
         />
         <StatCard
-          title="Gross Revenue Processed"
+          title="Total Sales Collected"
           value={`₹${(stats?.totalRevenue || 0) / 100}`}
           icon="Banknote"
         />

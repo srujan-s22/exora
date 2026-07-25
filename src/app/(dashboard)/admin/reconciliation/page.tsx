@@ -94,8 +94,8 @@ export default function ReconciliationPage() {
     <ContentWrapper>
       {/* Page Header */}
       <PageHeader
-        title="Revenue & Admissions Reconciliation"
-        description="Audits expected sales invoices against gate scan entrance frequencies to detect cash discrepancies."
+        title="Sales & Gate Entry Matching"
+        description="Compares ticket sales against gate entries to detect any cash or attendance differences."
         actions={
           <div className="flex gap-2">
             <Button
@@ -113,7 +113,7 @@ export default function ReconciliationPage() {
               onClick={handleExportCSV}
               leftIcon={<Download size={14} />}
             >
-              Export CSV Ledger
+              Export CSV Report
             </Button>
           </div>
         }
@@ -125,7 +125,7 @@ export default function ReconciliationPage() {
         <Card className="border border-gray-800 bg-gray-900 shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Aggregate Ledger Match</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Total Revenue Match</span>
               <div className="flex h-9 w-9 items-center justify-center rounded bg-gray-850 text-accent-300">
                 <Scale size={18} />
               </div>
@@ -143,7 +143,7 @@ export default function ReconciliationPage() {
                   <AlertTriangle size={10} /> Discrepancy: ₹{totalRevMismatch / 100}
                 </span>
               )}
-              <span className="text-gray-500">Collected vs Expected</span>
+              <span className="text-gray-500">Collected Cash vs Sales</span>
             </div>
           </CardContent>
         </Card>
@@ -169,7 +169,7 @@ export default function ReconciliationPage() {
         <Card className="border border-gray-800 bg-gray-900 shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Bypass / Counterfeit Alarms</span>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Unmatched Gate Entry Alerts</span>
               <div className="flex h-9 w-9 items-center justify-center rounded bg-gray-850 text-red-600">
                 <ShieldAlert size={18} />
               </div>
@@ -178,7 +178,7 @@ export default function ReconciliationPage() {
               {totalBypassCounts}
             </h3>
             <div className="flex items-center gap-1.5 mt-2.5 text-xs text-gray-500">
-              <span>Gate entries exceeding official sales</span>
+              <span>Gate entries exceeding ticket sales</span>
             </div>
           </CardContent>
         </Card>
@@ -187,19 +187,19 @@ export default function ReconciliationPage() {
       {/* Main Reconciliation Ledger */}
       <Card className="border border-gray-800 bg-gray-900 shadow-lg">
         <CardHeader className="py-4 border-b border-gray-850 flex flex-row items-center justify-between">
-          <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400">Reconciliation Analysis Ledger</CardTitle>
+          <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-400">Detailed Sales & Entry Comparison</CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-300">
             <thead className="bg-gray-850 text-xs font-bold uppercase text-gray-400 border-b border-gray-800">
               <tr>
-                <th className="px-6 py-4.5">Exhibition Scope</th>
+                <th className="px-6 py-4.5">Exhibition Name</th>
                 <th className="px-6 py-4.5 text-center">Tickets Sold</th>
                 <th className="px-6 py-4.5 text-center">Gate Scans</th>
-                <th className="px-6 py-4.5 text-center">Scan Delta</th>
+                <th className="px-6 py-4.5 text-center">Extra Scans</th>
                 <th className="px-6 py-4.5 text-right">Expected Revenue</th>
                 <th className="px-6 py-4.5 text-right">Collected Revenue</th>
-                <th className="px-6 py-4.5 text-right">Leakage / Delta</th>
+                <th className="px-6 py-4.5 text-right">Revenue Difference</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-850 text-xs">
@@ -210,7 +210,7 @@ export default function ReconciliationPage() {
                   <td className="px-6 py-4 text-center font-mono">{row.ticketsScanned}</td>
                   <td className="px-6 py-4 text-center font-mono">
                     {row.mismatchCount > 0 ? (
-                      <span className="text-red-600 bg-red-500/5 px-2 py-0.5 rounded font-bold uppercase">+{row.mismatchCount} Bypass</span>
+                      <span className="text-red-600 bg-red-500/5 px-2 py-0.5 rounded font-bold uppercase">+{row.mismatchCount} Extra Scans</span>
                     ) : (
                       <span className="text-gray-500">-</span>
                     )}

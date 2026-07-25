@@ -167,8 +167,8 @@ export default function ReportsPage() {
     <ContentWrapper>
       {/* Page Header */}
       <PageHeader
-        title="Business Intelligence Reports"
-        description="Comprehensive audit tables, sales summaries, gate checking throughput, and security rejections."
+        title="Sales & Analytics Reports"
+        description="View and download sales summaries, gate entries, and counter revenue reports."
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <Button

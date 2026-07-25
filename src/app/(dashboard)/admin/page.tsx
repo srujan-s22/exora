@@ -236,8 +236,8 @@ export default function AdminDashboardPage() {
     <ContentWrapper>
       {/* Page Header */}
       <PageHeader
-        title="Administrative Command Center"
-        description="Real-time aggregation of multi-exhibition metrics, gate operations, and staff audits."
+        title="Admin Dashboard"
+        description="Overview of ticket sales, gate entries, system security, and staff activity."
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -266,11 +266,11 @@ export default function AdminDashboardPage() {
       <div className="mb-6 grid gap-4 p-4 rounded-xl border border-gray-800 bg-gray-900 shadow-sm sm:grid-cols-2 lg:grid-cols-3 xl:max-w-4xl">
         <div>
           <Select
-            label="Supervised Exhibition Scope"
+            label="Filter Exhibition"
             value={selectedExhibitionId}
             onChange={(e) => setSelectedExhibitionId(e.target.value)}
             options={[
-              { label: 'All Supervised Exhibitions', value: 'all' },
+              { label: 'All Exhibitions', value: 'all' },
               ...(dashboardData?.exhibitionBreakdown?.map((e: any) => ({
                 label: e.name,
                 value: e.id,
@@ -293,7 +293,7 @@ export default function AdminDashboardPage() {
         <div className="flex items-end justify-start sm:justify-end">
           <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 bg-gray-850 px-3.5 py-2.5 rounded-lg border border-gray-800 w-full justify-between">
             <span className="flex items-center gap-1.5"><CalendarDays size={14} className="text-accent-300" /> Operational Shifts:</span>
-            <span className="text-gray-200 font-mono">Active Terminals ({dashboardData?.stats?.staffCount || 0})</span>
+            <span className="text-gray-200 font-mono">Active Staff ({dashboardData?.stats?.staffCount || 0})</span>
           </div>
         </div>
       </div>
@@ -302,7 +302,7 @@ export default function AdminDashboardPage() {
       {metrics && (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
           <StatCard
-            title="Aggregated Gross Revenue"
+            title="Total Revenue"
             value={`₹${(metrics.totalRevenue / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
             icon="Banknote"
             change={metrics.revenueChange}
@@ -310,7 +310,7 @@ export default function AdminDashboardPage() {
             isLoading={isRefreshing}
           />
           <StatCard
-            title="Total Admission Tickets"
+            title="Tickets Issued"
             value={metrics.ticketsSold}
             icon="Ticket"
             change={metrics.todayTickets > 0 ? 100 : undefined}
@@ -318,14 +318,14 @@ export default function AdminDashboardPage() {
             isLoading={isRefreshing}
           />
           <StatCard
-            title="Valid Admissions"
+            title="Successful Gate Scans"
             value={metrics.validEntries}
             icon="ScanLine"
             change={undefined}
             isLoading={isRefreshing}
           />
           <StatCard
-            title="Gate Security Events"
+            title="Gate Security Alerts"
             value={metrics.invalidScans}
             icon="ShieldCheck"
             change={metrics.invalidScans > 0 ? Math.round((metrics.duplicateBlocks / metrics.invalidScans) * 100) : 0}

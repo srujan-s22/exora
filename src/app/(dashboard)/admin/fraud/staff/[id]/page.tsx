@@ -196,7 +196,7 @@ export default function StaffTimelinePage({ params }: { params: Promise<{ id: st
                             {/* Link lookup if ticket referenced */}
                             {item.meta?.ticketNumber && (
                               <Link href={`/admin/fraud/tickets/${item.meta.ticketNumber}`} className="flex items-center gap-0.5 text-accent-300 hover:underline">
-                                <span>Forensics Lookup</span>
+                                <span>View Ticket Details</span>
                                 <ChevronRight size={10} />
                               </Link>
                             )}

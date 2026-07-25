@@ -240,7 +240,7 @@ export default function RideStaffDashboard() {
   if (!dashboardData || !dashboardData.assigned) {
     return (
       <ContentWrapper>
-        <PageHeader title="Ride Scanner Terminal" description="Verify rider admission passes." showDivider />
+        <PageHeader title="Ride Ticket Scanner" description="Scan and verify ride tickets." showDivider />
         <div className="mx-auto max-w-lg mt-12 p-8 text-center bg-gray-900 border border-gray-800 rounded-xl">
           <div className="flex justify-center text-warning mb-4">
             <AlertCircle size={48} />
@@ -268,8 +268,8 @@ export default function RideStaffDashboard() {
     <ContentWrapper>
       {/* Page Header */}
       <PageHeader
-        title={`Ride Scanner Terminal: ${ride.name}`}
-        description="Verify ride entrance QR credentials in real time. Prevents duplicate checks and expired passes."
+        title={`Ride Ticket Scanner: ${ride.name}`}
+        description="Scan and verify ride tickets in real time. Prevents reuse of old or invalid tickets."
         showDivider
       />
 

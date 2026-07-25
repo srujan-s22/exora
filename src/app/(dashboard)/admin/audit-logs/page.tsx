@@ -192,7 +192,7 @@ export default function AuditLogsPage() {
     <ContentWrapper>
       {/* Page Header */}
       <PageHeader
-        title="Audit Logs History"
+        title="System Activity Logs"
         description="Chronological record of all actions performed by administrators, gate scanners, and counter operators."
         actions={
           <Button
