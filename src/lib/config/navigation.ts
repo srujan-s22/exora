@@ -32,6 +32,7 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
         { label: 'Tickets', href: '/admin/tickets', icon: 'Ticket' },
         { label: 'Rides & Games', href: '/admin/rides', icon: 'Gamepad2' },
         { label: 'Staff', href: '/admin/staff', icon: 'Users' },
+        { label: 'Notifications', href: '/admin/notifications', icon: 'Bell' },
       ],
     },
     {
