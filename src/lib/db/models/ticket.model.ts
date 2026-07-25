@@ -10,6 +10,9 @@ export interface ITicket extends Document {
   qrHash: string;
   status: string;
   scanCount: number;
+  quantity: number;
+  usedCount: number;
+  remainingCount: number;
   soldBy: mongoose.Types.ObjectId;
   soldAt: Date;
   usedAt?: Date;
@@ -67,6 +70,24 @@ const TicketSchema = new Schema<ITicket>(
       type: Number,
       required: true,
       default: 0,
+      min: 0,
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      default: 1,
+      min: 1,
+    },
+    usedCount: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+    },
+    remainingCount: {
+      type: Number,
+      required: true,
+      default: 1,
       min: 0,
     },
     soldBy: {
@@ -140,5 +161,8 @@ TicketSchema.index({ exhibitionId: 1, soldAt: -1 });
 TicketSchema.index({ soldBy: 1, soldAt: -1 });
 TicketSchema.index({ exhibitionId: 1, paymentMethod: 1 });
 
-export const Ticket =
-  mongoose.models.Ticket || mongoose.model<ITicket>('Ticket', TicketSchema);
+if (mongoose.models && mongoose.models.Ticket) {
+  delete (mongoose.models as any).Ticket;
+}
+
+export const Ticket = mongoose.model<ITicket>('Ticket', TicketSchema);

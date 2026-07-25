@@ -71,73 +71,70 @@ export const TicketService = {
 
     const secret = process.env.QR_HMAC_SECRET || 'dev-qr-secret-only-for-local-development-change-in-production';
 
-    const createdTickets = [];
-    const qrDataUrls = [];
-    let primaryTransactionId = '';
+    // Issue 1 Ticket Bundle per transaction (1 QR code representing total quantity)
+    const ticketNumber = generateTicketNumber('EXH');
+    const primaryTransactionId = generateTransactionId('TXN');
+    const tempToken = `temp-${Date.now()}`;
+    const totalAmount = price * quantity;
 
-    // Create tickets double-pass flow inside a loop to ensure payload uses generated MongoDB _id
-    for (let i = 0; i < quantity; i++) {
-      const ticketNumber = generateTicketNumber('EXH');
-      const ticketTransactionId = generateTransactionId('TXN');
-      if (i === 0) {
-        primaryTransactionId = ticketTransactionId;
-      }
-      
-      const tempToken = `temp-${i}-${Date.now()}`;
+    const tDoc = await TicketModel.create({
+      ticketNumber,
+      exhibitionId: exhibition._id,
+      ticketType: tType.name,
+      price, // unit price in paise
+      qrPayload: tempToken,
+      qrHash: tempToken,
+      status: 'valid',
+      scanCount: 0,
+      quantity,
+      usedCount: 0,
+      remainingCount: quantity,
+      soldBy: user._id,
+      soldAt: new Date(),
+      paymentMethod: data.paymentMethod || 'free',
+      paymentStatus: data.paymentMethod === 'free' ? 'free' : 'paid',
+      source: data.source || 'counter',
+      createdBy: user._id,
+      customerName: data.customerName?.trim() || undefined,
+      customerPhone: data.customerPhone?.trim() || undefined,
+      metadata: {
+        notes: data.notes?.trim() || undefined,
+        transactionId: primaryTransactionId,
+        upiTransactionRef: data.upiTransactionRef?.trim() || undefined,
+      },
+    });
 
-      const tDoc = await TicketModel.create({
-        ticketNumber,
-        exhibitionId: exhibition._id,
-        ticketType: tType.name,
-        price,
-        qrPayload: tempToken,
-        qrHash: tempToken,
-        status: 'valid',
-        scanCount: 0,
-        soldBy: user._id,
-        soldAt: new Date(),
-        paymentMethod: data.paymentMethod || 'free',
-        paymentStatus: data.paymentMethod === 'free' ? 'free' : 'paid',
-        source: data.source || 'counter',
-        createdBy: user._id,
-        customerName: data.customerName?.trim() || undefined,
-        customerPhone: data.customerPhone?.trim() || undefined,
-        metadata: {
-          notes: data.notes?.trim() || undefined,
-          transactionId: ticketTransactionId,
-          upiTransactionRef: data.upiTransactionRef?.trim() || undefined,
-        },
-      });
+    // Secure cryptographic signature payload referencing the ticket bundle
+    const qrPayload = createQrPayload(
+      {
+        ticketId: tDoc._id.toString(),
+        exhibitionId: exhibition._id.toString(),
+        timestamp: Date.now(),
+      },
+      secret
+    );
+    const qrHash = sha256(qrPayload);
 
-      // Secure cryptographic signature payload containing actual MongoDB _id
-      const qrPayload = createQrPayload(
-        {
-          ticketId: tDoc._id.toString(),
-          exhibitionId: exhibition._id.toString(),
-          timestamp: Date.now(),
-        },
-        secret
-      );
-      const qrHash = sha256(qrPayload);
+    // Second-pass update
+    tDoc.qrPayload = qrPayload;
+    tDoc.qrHash = qrHash;
+    await tDoc.save();
 
-      // Second-pass updates
-      tDoc.qrPayload = qrPayload;
-      tDoc.qrHash = qrHash;
-      await tDoc.save();
+    // Renders single Base64 QR Image for the whole bundle
+    const qrDataUrl = await generateQrDataUrl(qrPayload);
 
-      // Renders Base64 Image
-      const qrDataUrl = await generateQrDataUrl(qrPayload);
-
-      createdTickets.push(tDoc.toJSON());
-      qrDataUrls.push(qrDataUrl);
-    }
+    const createdTicketJSON = {
+      ...tDoc.toJSON(),
+      quantity,
+      usedCount: 0,
+      remainingCount: quantity,
+    };
 
     // 6. Create the unified Sale transaction record
-    const totalAmount = price * quantity;
     await SaleModel.create({
       transactionId: primaryTransactionId,
       exhibitionId: exhibition._id,
-      tickets: createdTickets.map((t) => t.id),
+      tickets: [tDoc._id],
       ticketCount: quantity,
       totalAmount,
       paymentMethod: data.paymentMethod || 'free',
@@ -160,7 +157,7 @@ export const TicketService = {
       performedBy: user._id.toString(),
       performedByRole: user.role,
       targetType: 'ticket',
-      targetId: createdTickets[0].id.toString(),
+      targetId: tDoc._id.toString(),
       exhibitionId: exhibition._id.toString(),
       details: {
         exhibitionName: exhibition.name,
@@ -172,8 +169,8 @@ export const TicketService = {
     });
 
     return {
-      tickets: createdTickets as unknown as Ticket[],
-      qrDataUrls,
+      tickets: [createdTicketJSON as unknown as Ticket],
+      qrDataUrls: [qrDataUrl],
     };
   },
 
@@ -186,104 +183,67 @@ export const TicketService = {
     const { TicketScan: TicketScanModel } = await import('@/lib/db/models/ticket-scan.model');
 
     // ── Duplicate Scan Suppression (2-second window) ──
-    // If this exact payload was scanned at this exhibition in the last 2 seconds,
-    // return the cached result of that recent scan without logging a new scan entry or warning.
     const cooldownWindow = new Date(Date.now() - 2000);
     const existingRecentScan = await TicketScanModel.findOne({
       qrPayloadRaw: qrPayload,
       exhibitionId: data.exhibitionId,
-      scannedAt: { $gte: cooldownWindow }
+      scannedAt: { $gte: cooldownWindow },
     }).sort({ scannedAt: -1 });
 
     if (existingRecentScan) {
       let ticketObj: Ticket | undefined = undefined;
       const parsedPayload = parseQrPayload(qrPayload, secret);
-      if (parsedPayload && mongoose.Types.ObjectId.isValid(parsedPayload.ticketId)) {
-        const ticketDoc = await TicketModel.findById(parsedPayload.ticketId);
-        if (ticketDoc) {
-          ticketObj = ticketDoc.toJSON() as unknown as Ticket;
-        }
-      }
-
-      const isAdmitted = existingRecentScan.result === 'admitted';
-      
-      let friendlyMessage = 'Scan ignored (duplicate scan within cooldown).';
-      if (existingRecentScan.result === 'admitted') {
-        friendlyMessage = 'Access Granted. Welcome!';
-      } else if (existingRecentScan.result === 'rejected_used') {
-        friendlyMessage = 'Duplicate ticket: Already used.';
-      } else if (existingRecentScan.reason) {
-        friendlyMessage = existingRecentScan.reason;
+      if (parsedPayload && parsedPayload.ticketId && mongoose.Types.ObjectId.isValid(parsedPayload.ticketId)) {
+        const doc = await TicketModel.findById(parsedPayload.ticketId);
+        if (doc) ticketObj = doc.toJSON() as unknown as Ticket;
       }
 
       return {
-        valid: isAdmitted,
-        result: existingRecentScan.result,
+        valid: existingRecentScan.result === 'admitted',
+        result: existingRecentScan.result as any,
         ticket: ticketObj,
-        message: friendlyMessage,
+        message: existingRecentScan.result === 'admitted'
+          ? `Admitted recently (${existingRecentScan.reason || 'Entry granted'}).`
+          : existingRecentScan.reason || 'Duplicate scan within cooldown window.',
       };
     }
 
-    // 1. Verify QR Payload Cryptographic Signature
-    const parsedPayload = parseQrPayload(qrPayload, secret);
-    
-    const { User: UserModel } = await import('@/lib/db/models/user.model');
-    const { Exhibition: ExhibitionModel } = await import('@/lib/db/models/exhibition.model');
-
+    // 1. Fetch Staff User
     const staffUser = await UserModel.findById(gateStaffId);
-    const gateExhibition = await ExhibitionModel.findById(data.exhibitionId);
-    
-    if (!gateExhibition) {
-      throw new Error('Exhibition not found');
-    }
 
-    if (!parsedPayload) {
-      // Signature is invalid -> Suspected Forgery/Fake QR
+    // 2. Parse Cryptographic HMAC QR Payload
+    const payloadData = parseQrPayload(qrPayload, secret);
+    if (!payloadData || !payloadData.ticketId || !mongoose.Types.ObjectId.isValid(payloadData.ticketId)) {
+      const qrHash = sha256(qrPayload);
+      const ticketByHash = await TicketModel.findOne({ qrHash });
+
       await TicketScanModel.create({
-        exhibitionId: gateExhibition._id,
+        ticketId: ticketByHash ? ticketByHash._id : undefined,
+        exhibitionId: new mongoose.Types.ObjectId(data.exhibitionId),
         scannedBy: new mongoose.Types.ObjectId(gateStaffId),
         scannedAt: new Date(),
         result: 'rejected_unknown',
         qrPayloadRaw: qrPayload,
-        reason: 'HMAC signature verification failed. Forgery suspected.',
+        reason: 'Cryptographic signature is invalid or payload has been tampered with.',
         gateId: data.gateId,
       });
 
       return {
         valid: false,
         result: 'rejected_unknown',
-        message: 'Invalid ticket payload. Decryption or signature check failed.',
+        ticket: ticketByHash ? (ticketByHash.toJSON() as unknown as Ticket) : undefined,
+        message: 'Invalid or forged QR code. Cryptographic verification failed.',
       };
     }
 
-    const { ticketId } = parsedPayload;
-
-    // 2. Fetch the Ticket Record
-    if (!mongoose.Types.ObjectId.isValid(ticketId)) {
-      await TicketScanModel.create({
-        exhibitionId: gateExhibition._id,
-        scannedBy: new mongoose.Types.ObjectId(gateStaffId),
-        scannedAt: new Date(),
-        result: 'rejected_invalid',
-        qrPayloadRaw: qrPayload,
-        reason: 'Invalid ticket ID format.',
-        gateId: data.gateId,
-      });
-
-      return {
-        valid: false,
-        result: 'rejected_invalid',
-        message: 'Ticket verification failed: Invalid ticket reference.',
-      };
-    }
-
-    const ticket = await TicketModel.findById(ticketId);
+    // 3. Fetch Ticket Bundle document from MongoDB
+    const ticket = await TicketModel.findById(payloadData.ticketId);
     if (!ticket) {
       await TicketScanModel.create({
-        exhibitionId: gateExhibition._id,
+        exhibitionId: new mongoose.Types.ObjectId(data.exhibitionId),
         scannedBy: new mongoose.Types.ObjectId(gateStaffId),
         scannedAt: new Date(),
-        result: 'rejected_invalid',
+        result: 'rejected_unknown',
         qrPayloadRaw: qrPayload,
         reason: 'Ticket record not found in database.',
         gateId: data.gateId,
@@ -291,23 +251,23 @@ export const TicketService = {
 
       return {
         valid: false,
-        result: 'rejected_invalid',
-        message: 'Ticket not found in systems database.',
+        result: 'rejected_unknown',
+        message: 'Ticket record not found in database.',
       };
     }
 
     const ticketStatusBefore = ticket.status;
 
-    // 3. Verify Wrong Exhibition Scoping
-    if (ticket.exhibitionId.toString() !== gateExhibition._id.toString()) {
+    // Verify Exhibition Scope match
+    if (ticket.exhibitionId.toString() !== data.exhibitionId) {
       await TicketScanModel.create({
         ticketId: ticket._id,
-        exhibitionId: gateExhibition._id,
+        exhibitionId: new mongoose.Types.ObjectId(data.exhibitionId),
         scannedBy: new mongoose.Types.ObjectId(gateStaffId),
         scannedAt: new Date(),
         result: 'rejected_wrong_exhibition',
         qrPayloadRaw: qrPayload,
-        reason: `Wrong exhibition. Ticket is configured for exhibition ID: ${ticket.exhibitionId}. Current gate exhibition: ${gateExhibition._id}`,
+        reason: `Ticket belongs to a different exhibition.`,
         ticketStatusBefore,
         ticketStatusAfter: ticketStatusBefore,
         gateId: data.gateId,
@@ -317,20 +277,21 @@ export const TicketService = {
         valid: false,
         result: 'rejected_wrong_exhibition',
         ticket: ticket.toJSON() as unknown as Ticket,
-        message: `Ticket belongs to a different exhibition. Current gate is configured for '${gateExhibition.name}'.`,
+        message: 'This ticket is issued for a different exhibition.',
       };
     }
 
-    // Check exhibition is active
-    if (gateExhibition.status !== 'active') {
+    // Ensure Gate Exhibition active
+    const gateExhibition = await ExhibitionModel.findById(data.exhibitionId);
+    if (!gateExhibition || gateExhibition.status !== 'active') {
       await TicketScanModel.create({
         ticketId: ticket._id,
-        exhibitionId: gateExhibition._id,
+        exhibitionId: new mongoose.Types.ObjectId(data.exhibitionId),
         scannedBy: new mongoose.Types.ObjectId(gateStaffId),
         scannedAt: new Date(),
         result: 'rejected_expired',
         qrPayloadRaw: qrPayload,
-        reason: `Exhibition status is '${gateExhibition.status}' (inactive). Entry scanning is closed.`,
+        reason: 'Exhibition status is not active.',
         ticketStatusBefore,
         ticketStatusAfter: ticketStatusBefore,
         gateId: data.gateId,
@@ -340,11 +301,11 @@ export const TicketService = {
         valid: false,
         result: 'rejected_expired',
         ticket: ticket.toJSON() as unknown as Ticket,
-        message: `Exhibition '${gateExhibition.name}' is currently not active (status: ${gateExhibition.status}). Entry scanning is closed.`,
+        message: `Exhibition '${gateExhibition?.name || 'Exhibition'}' is currently closed for entry.`,
       };
     }
 
-    // 4. Verify Ticket Status (Cancelled / Expired / Already Used)
+    // 4. Verify Ticket Status (Cancelled / Expired / Exhausted)
     if (ticket.status === 'cancelled') {
       await TicketScanModel.create({
         ticketId: ticket._id,
@@ -353,7 +314,7 @@ export const TicketService = {
         scannedAt: new Date(),
         result: 'rejected_invalid',
         qrPayloadRaw: qrPayload,
-        reason: 'Ticket is marked cancelled (refunded or voided).',
+        reason: 'Ticket bundle is marked cancelled (refunded or voided).',
         ticketStatusBefore,
         ticketStatusAfter: ticketStatusBefore,
         gateId: data.gateId,
@@ -363,7 +324,7 @@ export const TicketService = {
         valid: false,
         result: 'rejected_invalid',
         ticket: ticket.toJSON() as unknown as Ticket,
-        message: 'Ticket has been cancelled or voided. Access denied.',
+        message: 'Ticket bundle has been cancelled or voided. Access denied.',
       };
     }
 
@@ -375,7 +336,7 @@ export const TicketService = {
         scannedAt: new Date(),
         result: 'rejected_expired',
         qrPayloadRaw: qrPayload,
-        reason: 'Ticket validity date has expired.',
+        reason: 'Ticket bundle validity date has expired.',
         ticketStatusBefore,
         ticketStatusAfter: ticketStatusBefore,
         gateId: data.gateId,
@@ -385,17 +346,16 @@ export const TicketService = {
         valid: false,
         result: 'rejected_expired',
         ticket: ticket.toJSON() as unknown as Ticket,
-        message: 'This ticket has expired. Validity date is past.',
+        message: 'This ticket bundle has expired. Validity date is past.',
       };
     }
 
-    if (ticket.status === 'used') {
-      // Find previous scan time for friendly double-scan warning message
-      const lastScan = await TicketScanModel.findOne({ ticketId: ticket._id, result: 'admitted' }).sort({ scannedAt: -1 });
-      const lastScanStr = lastScan 
-        ? `Admitted at ${new Intl.DateTimeFormat('en-IN', { timeStyle: 'medium' }).format(lastScan.scannedAt)} by Gate Staff.`
-        : 'Already used.';
+    // Backwards-compatible bundle fields fallback
+    const totalQty = ticket.quantity || 1;
+    const prevUsed = ticket.usedCount || 0;
+    const prevRemaining = ticket.remainingCount ?? (totalQty - prevUsed);
 
+    if (ticket.status === 'used' || prevRemaining <= 0) {
       await TicketScanModel.create({
         ticketId: ticket._id,
         exhibitionId: gateExhibition._id,
@@ -403,9 +363,9 @@ export const TicketService = {
         scannedAt: new Date(),
         result: 'rejected_used',
         qrPayloadRaw: qrPayload,
-        reason: 'Duplicate ticket entry attempt.',
+        reason: 'Ticket bundle already completed. All entries used.',
         ticketStatusBefore,
-        ticketStatusAfter: ticketStatusBefore,
+        ticketStatusAfter: 'used',
         gateId: data.gateId,
       });
 
@@ -413,50 +373,114 @@ export const TicketService = {
         valid: false,
         result: 'rejected_used',
         ticket: ticket.toJSON() as unknown as Ticket,
-        message: `Duplicate ticket: ${lastScanStr}`,
+        message: `All ${totalQty} entries on this ticket bundle have already been used.`,
+        quantity: totalQty,
+        usedCount: totalQty,
+        remainingCount: 0,
       };
     }
 
-    // 5. Admit entry and update ticket
-    ticket.status = 'used';
-    ticket.usedAt = new Date();
-    ticket.usedBy = new mongoose.Types.ObjectId(gateStaffId);
-    ticket.scanCount = (ticket.scanCount || 0) + 1;
-    await ticket.save();
+    // 5. Calculate admissions count for this scan
+    const requestedAdmitCount = Math.max(1, data.countToAdmit || 1);
+    const countToAdmit = Math.min(requestedAdmitCount, prevRemaining);
 
+    if (countToAdmit <= 0) {
+      return {
+        valid: false,
+        result: 'rejected_used',
+        ticket: ticket.toJSON() as unknown as Ticket,
+        message: `No remaining entries available on this ticket bundle.`,
+        quantity: totalQty,
+        usedCount: prevUsed,
+        remainingCount: prevRemaining,
+      };
+    }
+
+    const newUsed = prevUsed + countToAdmit;
+    const newRemaining = prevRemaining - countToAdmit;
+    const nextStatus = newRemaining === 0 ? 'used' : 'partially_used';
+
+    // ATOMIC MONGODB UPDATE WITH GUARD CONDITION
+    const updatedTicket = await TicketModel.findOneAndUpdate(
+      {
+        _id: ticket._id,
+        remainingCount: { $gte: countToAdmit },
+        status: { $in: ['valid', 'partially_used'] },
+      },
+      {
+        $inc: { usedCount: countToAdmit, remainingCount: -countToAdmit, scanCount: 1 },
+        $set: {
+          status: nextStatus,
+          usedAt: new Date(),
+          usedBy: new mongoose.Types.ObjectId(gateStaffId),
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedTicket) {
+      return {
+        valid: false,
+        result: 'rejected_used',
+        ticket: ticket.toJSON() as unknown as Ticket,
+        message: `Insufficient remaining entries on ticket bundle or concurrent scan detected. Please retry.`,
+        quantity: totalQty,
+        usedCount: prevUsed,
+        remainingCount: prevRemaining,
+      };
+    }
+
+    // Log Scan Entry
     await TicketScanModel.create({
-      ticketId: ticket._id,
+      ticketId: updatedTicket._id,
       exhibitionId: gateExhibition._id,
       scannedBy: new mongoose.Types.ObjectId(gateStaffId),
       scannedAt: new Date(),
       result: 'admitted',
       qrPayloadRaw: qrPayload,
-      reason: 'Valid ticket, access granted.',
+      reason: `Admitted ${countToAdmit} visitor(s). ${newRemaining} remaining.`,
       ticketStatusBefore,
-      ticketStatusAfter: 'used',
+      ticketStatusAfter: nextStatus,
+      admittedCount: countToAdmit,
+      previousUsedCount: prevUsed,
+      newUsedCount: newUsed,
+      previousRemainingCount: prevRemaining,
+      newRemainingCount: newRemaining,
       gateId: data.gateId,
     });
 
-    // 6. Write to AuditLogs
+    // Write to AuditLogs
     await AuditService.create({
       action: 'ticket.scan',
       performedBy: gateStaffId,
       performedByRole: staffUser?.role || 'gate',
       targetType: 'ticket',
-      targetId: ticket._id.toString(),
+      targetId: updatedTicket._id.toString(),
       exhibitionId: gateExhibition._id.toString(),
       details: {
-        ticketNumber: ticket.ticketNumber,
-        ticketType: ticket.ticketType,
-        result: 'admitted',
+        ticketNumber: updatedTicket.ticketNumber,
+        ticketType: updatedTicket.ticketType,
+        admittedCount: countToAdmit,
+        previousRemainingCount: prevRemaining,
+        newRemainingCount: newRemaining,
+        status: nextStatus,
       },
     });
+
+    const formattedMessage =
+      newRemaining === 0
+        ? `Access Granted! All ${updatedTicket.quantity} visitor(s) admitted.`
+        : `Access Granted! Admitted ${countToAdmit} visitor(s). ${newRemaining} entry(s) remaining on bundle.`;
 
     return {
       valid: true,
       result: 'admitted',
-      ticket: ticket.toJSON() as unknown as Ticket,
-      message: 'Access Granted. Welcome!',
+      ticket: updatedTicket.toJSON() as unknown as Ticket,
+      message: formattedMessage,
+      quantity: updatedTicket.quantity,
+      usedCount: updatedTicket.usedCount,
+      remainingCount: updatedTicket.remainingCount,
+      admittedThisScan: countToAdmit,
     };
   },
 

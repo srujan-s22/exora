@@ -570,7 +570,10 @@ export default function CounterDashboardPage() {
                 qrPayload={createdTickets[currentTicketIndex]?.qrPayload || ''}
                 qrDataUrl={createdQrDataUrls[currentTicketIndex]}
                 ticketType={createdTickets[currentTicketIndex]?.ticketType}
-                price={createdTickets[currentTicketIndex]?.price}
+                price={(createdTickets[currentTicketIndex]?.price || 0) * (createdTickets[currentTicketIndex]?.quantity || 1)}
+                quantity={createdTickets[currentTicketIndex]?.quantity || 1}
+                usedCount={createdTickets[currentTicketIndex]?.usedCount || 0}
+                remainingCount={createdTickets[currentTicketIndex]?.remainingCount ?? (createdTickets[currentTicketIndex]?.quantity || 1)}
                 exhibitionName={activeExhibition?.name || 'Exhibition'}
               />
             </div>
@@ -584,7 +587,10 @@ export default function CounterDashboardPage() {
                     qrPayload={ticket.qrPayload || ''}
                     qrDataUrl={createdQrDataUrls[idx]}
                     ticketType={ticket.ticketType}
-                    price={ticket.price}
+                    price={(ticket.price || 0) * (ticket.quantity || 1)}
+                    quantity={ticket.quantity || 1}
+                    usedCount={ticket.usedCount || 0}
+                    remainingCount={ticket.remainingCount ?? (ticket.quantity || 1)}
                     exhibitionName={activeExhibition?.name || 'Exhibition'}
                   />
                 </div>

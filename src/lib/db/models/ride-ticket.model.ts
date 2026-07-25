@@ -9,7 +9,7 @@ export interface IRideTicket extends Document {
   price: number; // in paise
   qrPayload: string;
   qrHash: string;
-  status: 'valid' | 'used' | 'cancelled';
+  status: 'valid' | 'partially_used' | 'used' | 'cancelled';
   paymentMethod: string;
   paymentStatus: 'pending' | 'paid';
   soldBy: mongoose.Types.ObjectId;
@@ -17,6 +17,9 @@ export interface IRideTicket extends Document {
   usedAt?: Date;
   usedBy?: mongoose.Types.ObjectId;
   scanCount: number;
+  quantity: number;
+  usedCount: number;
+  remainingCount: number;
   customerName?: string;
   customerPhone?: string;
   metadata?: Record<string, unknown>;
@@ -65,8 +68,26 @@ const RideTicketSchema = new Schema<IRideTicket>(
     status: {
       type: String,
       required: true,
-      enum: ['valid', 'used', 'cancelled'],
+      enum: ['valid', 'partially_used', 'used', 'cancelled'],
       default: 'valid',
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      default: 1,
+      min: 1,
+    },
+    usedCount: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+    },
+    remainingCount: {
+      type: Number,
+      required: true,
+      default: 1,
+      min: 0,
     },
     paymentMethod: {
       type: String,
@@ -134,5 +155,8 @@ RideTicketSchema.index({ exhibitionId: 1, rideId: 1, status: 1 });
 RideTicketSchema.index({ rideId: 1, soldAt: -1 });
 RideTicketSchema.index({ soldBy: 1, soldAt: -1 });
 
-export const RideTicket =
-  mongoose.models.RideTicket || mongoose.model<IRideTicket>('RideTicket', RideTicketSchema);
+if (mongoose.models && mongoose.models.RideTicket) {
+  delete (mongoose.models as any).RideTicket;
+}
+
+export const RideTicket = mongoose.model<IRideTicket>('RideTicket', RideTicketSchema);

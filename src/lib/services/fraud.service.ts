@@ -52,12 +52,12 @@ export const FraudService = {
     const suspiciousIncidents = [
       ...suspiciousScans.map(s => ({
         id: s._id.toString(),
-        ticketNumber: s.ticketId?.ticketNumber || 'UNKNOWN',
-        exhibitionName: s.exhibitionId?.name || 'Exhibition',
-        exhibitionId: s.exhibitionId?._id?.toString() || '',
+        ticketNumber: (s.ticketId as any)?.ticketNumber || 'UNKNOWN',
+        exhibitionName: (s.exhibitionId as any)?.name || 'Exhibition',
+        exhibitionId: (s.exhibitionId as any)?._id?.toString() || '',
         scannedBy: s.scannedBy ? {
-          name: s.scannedBy.name,
-          staffId: s.scannedBy.staffId,
+          name: (s.scannedBy as any).name,
+          staffId: (s.scannedBy as any).staffId,
         } : null,
         scannedAt: s.scannedAt,
         result: s.result,
@@ -325,8 +325,8 @@ export const FraudService = {
     const scans = scansList.map(s => ({
       id: s._id.toString(),
       scannedAt: s.scannedAt,
-      scannedByName: s.scannedBy?.name || 'Gate Operator',
-      scannedByStaffId: s.scannedBy?.staffId || 'UNKNOWN',
+      scannedByName: (s.scannedBy as any)?.name || 'Gate Operator',
+      scannedByStaffId: (s.scannedBy as any)?.staffId || 'UNKNOWN',
       result: s.result,
       reason: s.reason || '',
       gateId: s.gateId,
@@ -401,19 +401,20 @@ export const FraudService = {
 
     scans.forEach(sc => {
       const isRejection = sc.result.startsWith('rejected_');
+      const tNum = (sc.ticketId as any)?.ticketNumber || 'UNKNOWN';
       timeline.push({
         id: sc._id.toString(),
         timestamp: sc.scannedAt,
         type: 'scan',
         title: isRejection ? 'Gate Scan Blocked' : 'Gate Check-in Admission',
         description: isRejection 
-          ? `Rejected ticket ${sc.ticketId?.ticketNumber || 'UNKNOWN'}: ${sc.reason}` 
-          : `Admitted ticket ${sc.ticketId?.ticketNumber || 'UNKNOWN'} successfully.`,
+          ? `Rejected ticket ${tNum}: ${sc.reason}` 
+          : `Admitted ticket ${tNum} successfully.`,
         value: sc.result === 'admitted' ? 'Valid' : 'Blocked',
         severity: sc.result === 'rejected_unknown' ? 'critical' : isRejection ? 'high' : 'low',
         meta: {
           result: sc.result,
-          ticketNumber: sc.ticketId?.ticketNumber,
+          ticketNumber: tNum,
           gateId: sc.gateId,
         }
       });

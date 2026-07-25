@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Gamepad2, Play, Square, History, RefreshCw, AlertCircle } from 'lucide-react';
+import { Gamepad2, Play, Square, History, RefreshCw, AlertCircle, ScanLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/components/providers/auth-provider';
@@ -10,8 +10,6 @@ import { useToast } from '@/components/providers/toast-provider';
 import { ContentWrapper } from '@/components/layout/content-wrapper';
 import { PageHeader } from '@/components/layout/page-header';
 import { StatCard } from '@/components/shared/stat-card';
-import { QRScanner } from '@/components/shared/qr-scanner';
-import { ScanResultCard } from '@/components/shared/scan-result-card';
 import { DataTable } from '@/components/ui/data-table';
 import { StatusIndicator } from '@/components/shared/status-indicator';
 
@@ -23,10 +21,6 @@ export default function RideStaffDashboard() {
   const [dataLoading, setDataLoading] = React.useState(true);
   const [dashboardData, setDashboardData] = React.useState<any>(null);
   const [isActionLoading, setIsActionLoading] = React.useState(false);
-
-  // Scanner outcome state
-  const [activeScan, setActiveScan] = React.useState<any | null>(null);
-  const [isProcessing, setIsProcessing] = React.useState(false);
 
   // Auth gate check
   React.useEffect(() => {
@@ -99,127 +93,36 @@ export default function RideStaffDashboard() {
     }
   };
 
-  const handleScanTrigger = async (payload: string, isFake = false) => {
-    if (!dashboardData?.assigned || !dashboardData?.ride) {
-      addToast({
-        type: 'warning',
-        title: 'Ride Assignment Required',
-        message: 'You have no active ride assigned.',
-      });
-      return;
-    }
-
-    const { ride } = dashboardData;
-    setIsProcessing(true);
-
-    try {
-      const payloadToSend = isFake ? 'tampered-fake-signature-token-payload' : payload;
-
-      const res = await fetch('/api/rides/tickets/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          qrPayload: payloadToSend,
-          exhibitionId: ride.exhibitionId,
-          rideId: ride.id,
-          gateId: 'ride-dashboard-terminal',
-        }),
-      });
-
-      const body = await res.json();
-      if (res.ok && body.success) {
-        const outcome = body.data; // contains valid, result, ticket, message
-        
-        const scanRecord = {
-          id: `scan-${Date.now()}`,
-          result: outcome.result,
-          ticketNumber: outcome.ticket?.ticketNumber || 'UNKNOWN',
-          ticketType: outcome.ticket?.ticketType || 'ride',
-          customerName: outcome.ticket?.customerName,
-          errorDetails: outcome.valid ? undefined : outcome.message,
-          scannedAt: new Date(),
-        };
-
-        setActiveScan(scanRecord);
-
-        // Feedback alert
-        if (outcome.valid) {
-          addToast({
-            type: 'success',
-            title: 'Rider Admitted',
-            message: `${scanRecord.ticketNumber} verified successfully.`,
-          });
-        } else {
-          addToast({
-            type: 'error',
-            title: 'Scan Rejected',
-            message: outcome.message,
-          });
-        }
-
-        // Refresh stats
-        loadDashboardData();
-      } else {
-        addToast({
-          type: 'error',
-          title: 'Verification Failed',
-          message: body.error?.message || 'Verification endpoint encountered a crash.',
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      addToast({
-        type: 'error',
-        title: 'Network Timeout',
-        message: 'Validation API request timed out.',
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   const columns = [
     {
-      key: 'ticketId',
+      key: 'ticketNumber',
       label: 'Ticket Ref',
-      render: (t: any, row: any) => {
-        const number = row.ticketNumber || (typeof t === 'object' ? t?.ticketNumber : t) || 'UNKNOWN';
-        return <span className="font-mono font-bold">{number}</span>;
-      },
+      render: (v: any, row: any) => (
+        <div className="font-mono text-xs font-bold text-gray-200">
+          {v || row.ticketId?.ticketNumber || 'N/A'}
+        </div>
+      ),
+    },
+    {
+      key: 'customerName',
+      label: 'Rider Name',
+      render: (v: any, row: any) => (
+        <span className="text-xs text-gray-300 font-medium">{v || row.ticketId?.customerName || 'Walk-in Visitor'}</span>
+      ),
     },
     {
       key: 'result',
-      label: 'Outcome Status',
+      label: 'Scan Status',
       render: (v: any) => {
-        const statusMap: Record<string, string> = {
-          admitted: 'active',
-          rejected_used: 'paused',
-          rejected_wrong_ride: 'false',
-          rejected_invalid: 'false',
-          rejected_closed: 'false',
-          rejected_unknown: 'false',
-        };
-        const labelMap: Record<string, string> = {
-          admitted: 'Admitted',
-          rejected_used: 'Duplicate',
-          rejected_wrong_ride: 'Wrong Ride',
-          rejected_invalid: 'Invalid Pass',
-          rejected_closed: 'Ride Closed',
-          rejected_unknown: 'Suspicious/Forged',
-        };
-        return (
-          <span className="flex items-center gap-1">
-            <StatusIndicator status={statusMap[v] || 'false'} />
-            <span className="text-xs text-gray-400 font-medium ml-1">({labelMap[v] || v})</span>
-          </span>
-        );
+        const isAdmitted = v === 'admitted';
+        return <StatusIndicator status={isAdmitted ? 'active' : 'archived'} />;
       },
     },
     {
       key: 'scannedAt',
       label: 'Scanned At',
       render: (v: any) => (
-        <span className="font-mono text-gray-400">
+        <span className="font-mono text-gray-400 text-xs">
           {new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(v))}
         </span>
       ),
@@ -236,11 +139,10 @@ export default function RideStaffDashboard() {
     );
   }
 
-  // If staff has no ride assigned
   if (!dashboardData || !dashboardData.assigned) {
     return (
       <ContentWrapper>
-        <PageHeader title="Ride Ticket Scanner" description="Scan and verify ride tickets." showDivider />
+        <PageHeader title="Ride Operator Dashboard" description="Ride checkpoint operations." showDivider />
         <div className="mx-auto max-w-lg mt-12 p-8 text-center bg-gray-900 border border-gray-800 rounded-xl">
           <div className="flex justify-center text-warning mb-4">
             <AlertCircle size={48} />
@@ -262,18 +164,29 @@ export default function RideStaffDashboard() {
     );
   }
 
-  const { ride, todayTicketsCount, validCount, invalidCount, totalScansToday, recentScans } = dashboardData;
+  const { ride, validCount, invalidCount, totalScansToday, recentScans } = dashboardData;
 
   return (
     <ContentWrapper>
-      {/* Page Header */}
+      {/* Page Header with Launch Scanner Button */}
       <PageHeader
-        title={`Ride Ticket Scanner: ${ride.name}`}
-        description="Scan and verify ride tickets in real time. Prevents reuse of old or invalid tickets."
+        title={`Ride Dashboard: ${ride.name}`}
+        description="Shift summary and entrance activity for your assigned ride."
         showDivider
+        actions={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => router.push('/ride/scan')}
+            leftIcon={<ScanLine size={18} />}
+            className="font-bold shadow-lg shadow-accent-500/20"
+          >
+            Launch Ride Scanner Terminal
+          </Button>
+        }
       />
 
-      {/* Statistics Shift summary cards */}
+      {/* Statistics summary cards */}
       <div className="grid gap-5 sm:grid-cols-3 mb-8">
         <StatCard
           title="Riders Admitted Today"
@@ -292,41 +205,73 @@ export default function RideStaffDashboard() {
         />
       </div>
 
-      {/* Scope Details Bar */}
-      <div className="mb-6 bg-gray-900 border border-gray-800 p-4 rounded-xl max-w-md select-none">
-        <span className="block text-[10px] font-bold text-accent-400 uppercase tracking-widest mb-2">Assigned Checkpoint Ride Context</span>
-        <div className="flex justify-between items-center bg-gray-950 px-3.5 py-2.5 rounded-lg border border-gray-850">
-          <span className="text-sm font-bold text-gray-100">{ride.name}</span>
-          <span className="text-xs text-accent-300 font-bold">₹{ride.price / 100} / rider</span>
+      {/* Ride Operational Status & Actions */}
+      <div className="mb-8 bg-gray-900 border border-gray-800 p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-gray-850 border border-gray-800 flex items-center justify-center text-accent-400 shrink-0">
+            <Gamepad2 size={24} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-base font-extrabold text-gray-100">{ride.name}</span>
+              <StatusIndicator status={ride.status === 'open' ? 'active' : 'paused'} />
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">Price: ₹{ride.price / 100} / rider</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <Button
+            variant={ride.status === 'open' ? 'secondary' : 'primary'}
+            size="sm"
+            onClick={handleToggleStatus}
+            disabled={isActionLoading}
+            leftIcon={ride.status === 'open' ? <Square size={14} /> : <Play size={14} />}
+            className="font-bold text-xs flex-1 md:flex-none"
+          >
+            {ride.status === 'open' ? 'Close Ride Queue' : 'Open Ride Queue'}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => router.push('/ride/scan')}
+            leftIcon={<ScanLine size={14} />}
+            className="font-bold text-xs flex-1 md:flex-none shadow-md"
+          >
+            Scan Ride Tickets
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3 items-start">
-        {/* Scanner view (Left) */}
-        <div className="lg:col-span-1">
-          {!activeScan ? (
-            <QRScanner onScan={handleScanTrigger} isProcessing={isProcessing} />
-          ) : (
-            <ScanResultCard
-              result={activeScan.result}
-              ticketNumber={activeScan.ticketNumber}
-              ticketType={activeScan.ticketType}
-              customerName={activeScan.customerName}
-              errorDetails={activeScan.errorDetails}
-              scannedAt={activeScan.scannedAt}
-              onReset={() => setActiveScan(null)}
-            />
-          )}
+      {/* Terminal Launch Banner */}
+      <div className="bg-gradient-to-r from-gray-900 via-gray-850 to-gray-900 border border-accent-500/20 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+        <div className="flex items-center gap-4">
+          <div className="h-14 w-14 rounded-2xl bg-accent-500/10 border border-accent-500/30 flex items-center justify-center text-accent-400 shrink-0">
+            <ScanLine size={28} />
+          </div>
+          <div>
+            <h3 className="text-lg font-extrabold text-gray-100">Ready to Scan & Admit Riders?</h3>
+            <p className="text-xs text-gray-400 mt-1">Open the dedicated camera terminal to scan ride ticket bundle QRs.</p>
+          </div>
         </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => router.push('/ride/scan')}
+          leftIcon={<ScanLine size={18} />}
+          className="shrink-0 font-extrabold shadow-lg shadow-accent-500/20 cursor-pointer"
+        >
+          Open Dedicated Terminal
+        </Button>
+      </div>
 
-        {/* Scan log feed (Right) */}
-        <div className="lg:col-span-2 space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 select-none flex items-center gap-2">
-            <History size={15} className="text-gray-500" />
-            <span>Ride Entrance Logs (Today)</span>
-          </h3>
-          <DataTable columns={columns} data={recentScans} />
-        </div>
+      {/* Scan Log Feed */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 select-none flex items-center gap-2">
+          <History size={15} className="text-gray-500" />
+          <span>Ride Entrance Logs (Today)</span>
+        </h3>
+        <DataTable columns={columns} data={recentScans || []} />
       </div>
     </ContentWrapper>
   );

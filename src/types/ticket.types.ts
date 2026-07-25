@@ -8,8 +8,11 @@ export interface Ticket {
   price: number;
   qrPayload: string;
   qrHash: string;
-  status: TicketStatus;
+  status: TicketStatus | 'partially_used';
   scanCount: number;
+  quantity: number;
+  usedCount: number;
+  remainingCount: number;
   soldBy: string;
   soldAt: Date;
   usedAt?: Date;
@@ -42,6 +45,7 @@ export interface ValidateTicketInput {
   qrPayload: string;
   exhibitionId: string;
   gateId?: string;
+  countToAdmit?: number;
 }
 
 export interface TicketValidationResult {
@@ -49,6 +53,10 @@ export interface TicketValidationResult {
   result: ScanResult;
   ticket?: Ticket;
   message: string;
+  quantity?: number;
+  usedCount?: number;
+  remainingCount?: number;
+  admittedThisScan?: number;
 }
 
 export interface TicketScan {
@@ -58,7 +66,6 @@ export interface TicketScan {
   scannedBy: string;
   scannedAt: Date;
   result: ScanResult;
-  qrPayloadRaw: string;
   deviceInfo?: string;
   gateId?: string;
   location?: {
@@ -68,4 +75,9 @@ export interface TicketScan {
   reason?: string;
   ticketStatusBefore?: string;
   ticketStatusAfter?: string;
+  admittedCount?: number;
+  previousUsedCount?: number;
+  newUsedCount?: number;
+  previousRemainingCount?: number;
+  newRemainingCount?: number;
 }

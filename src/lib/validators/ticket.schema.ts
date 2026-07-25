@@ -29,6 +29,7 @@ export const validateTicketSchema = z.object({
   qrPayload: z.string().min(1, 'QR payload is required'),
   exhibitionId: z.string().min(1, 'Exhibition ID is required'),
   gateId: z.string().optional(),
+  countToAdmit: z.number().int().min(1).optional(),
 });
 
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;

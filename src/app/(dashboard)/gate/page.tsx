@@ -1,12 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { Camera, CheckCircle2, History, AlertCircle, RefreshCw } from 'lucide-react';
+import { History, AlertCircle, RefreshCw, ScanLine } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ContentWrapper } from '@/components/layout/content-wrapper';
 import { StatCard } from '@/components/shared/stat-card';
-import { QRScanner } from '@/components/shared/qr-scanner';
-import { ScanResultCard } from '@/components/shared/scan-result-card';
 import { DataTable } from '@/components/ui/data-table';
 import { StatusIndicator } from '@/components/shared/status-indicator';
 import { useToast } from '@/components/providers/toast-provider';
@@ -29,10 +27,6 @@ export default function GateDashboardPage() {
 
   // Selected Exhibition
   const [selectedExhId, setSelectedExhId] = React.useState('');
-
-  // Scanner outcome state
-  const [activeScan, setActiveScan] = React.useState<any | null>(null);
-  const [isProcessing, setIsProcessing] = React.useState(false);
 
   // Gating check-in operators
   React.useEffect(() => {
@@ -84,123 +78,45 @@ export default function GateDashboardPage() {
     }
   }, [user, loadDashboardData]);
 
-  const handleScanTrigger = async (payload: string, isFake = false) => {
-    if (!selectedExhId) {
-      addToast({
-        type: 'warning',
-        title: 'Exhibition Required',
-        message: 'Please select the exhibition gate scope first.',
-      });
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      // Mock forgery directly if clicked forge scan button in scanner simulator
-      const payloadToSend = isFake ? 'tampered-signature-payload-token' : payload;
-
-      const res = await fetch('/api/tickets/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          qrPayload: payloadToSend,
-          exhibitionId: selectedExhId,
-          gateId: 'gate-checkpoint-1',
-        }),
-      });
-
-      const body = await res.json();
-      if (res.ok && body.success) {
-        const outcome = body.data; // contains valid, result, ticket, message
-        
-        const scanRecord = {
-          id: `scan-${Date.now()}`,
-          result: outcome.result,
-          ticketNumber: outcome.ticket?.ticketNumber || 'UNKNOWN',
-          ticketType: outcome.ticket?.ticketType,
-          customerName: outcome.ticket?.customerName,
-          errorDetails: outcome.valid ? undefined : outcome.message,
-          scannedAt: new Date(),
-        };
-
-        setActiveScan(scanRecord);
-
-        // Feedback alert
-        if (outcome.valid) {
-          addToast({
-            type: 'success',
-            title: 'Access Admitted',
-            message: `${scanRecord.ticketNumber} verified successfully.`,
-          });
-        } else {
-          addToast({
-            type: 'error',
-            title: 'Entry Rejected',
-            message: outcome.message,
-          });
-        }
-
-        // Refresh stats
-        loadDashboardData();
-      } else {
-        addToast({
-          type: 'error',
-          title: 'Verification Failed',
-          message: body.error?.message || 'Verification endpoint encountered a crash.',
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      addToast({
-        type: 'error',
-        title: 'Network Timeout',
-        message: 'Validation API request timed out.',
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   const columns = [
     {
-      key: 'ticketId',
+      key: 'ticketNumber',
       label: 'Ticket Ref',
-      render: (t: any) => <span className="font-mono font-bold">{t?.ticketNumber || 'UNKNOWN'}</span>,
+      render: (v: any, row: any) => (
+        <div className="font-mono text-xs font-bold text-gray-200">
+          {v || row.ticketId?.ticketNumber || 'N/A'}
+        </div>
+      ),
+    },
+    {
+      key: 'customerName',
+      label: 'Customer Name',
+      render: (v: any, row: any) => (
+        <span className="text-xs text-gray-300 font-medium">{v || row.ticketId?.customerName || 'Walk-in Visitor'}</span>
+      ),
     },
     {
       key: 'result',
-      label: 'Outcome Status',
+      label: 'Scan Status',
       render: (v: any) => {
-        const statusMap: Record<string, string> = {
-          admitted: 'active',
-          rejected_used: 'paused',
-          rejected_invalid: 'false',
-          rejected_expired: 'false',
-          rejected_wrong_exhibition: 'false',
-          rejected_unknown: 'false',
-        };
-        const labelMap: Record<string, string> = {
-          admitted: 'Admitted',
-          rejected_used: 'Duplicate',
-          rejected_invalid: 'Invalid Ticket',
-          rejected_expired: 'Expired',
-          rejected_wrong_exhibition: 'Wrong Event',
-          rejected_unknown: 'Suspicious/Forged',
-        };
-        return (
-          <span className="flex items-center gap-1">
-            <StatusIndicator status={statusMap[v] || 'false'} />
-            <span className="text-xs text-gray-400 font-medium ml-1">({labelMap[v] || v})</span>
-          </span>
-        );
+        const isAdmitted = v === 'admitted';
+        return <StatusIndicator status={isAdmitted ? 'active' : 'archived'} />;
       },
+    },
+    {
+      key: 'scannedBy',
+      label: 'Gate Staff',
+      render: (v: any) => (
+        <span className="text-xs text-gray-300">
+          {v?.name ? `${v.name} (${v.staffId || ''})` : 'Gate Operator'}
+        </span>
+      ),
     },
     {
       key: 'scannedAt',
       label: 'Scanned At',
       render: (v: any) => (
-        <span className="font-mono text-gray-400">
+        <span className="font-mono text-gray-400 text-xs">
           {new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(v))}
         </span>
       ),
@@ -221,7 +137,7 @@ export default function GateDashboardPage() {
   if (activeExhibitions.length === 0) {
     return (
       <ContentWrapper>
-        <PageHeader title="Gate QR Scanner Terminal" description="Verify admission passes." showDivider />
+        <PageHeader title="Gate Checkpoint Dashboard" description="Verify admission passes." showDivider />
         <div className="mx-auto max-w-lg mt-12 p-8 text-center bg-gray-900 border border-gray-800 rounded-xl">
           <div className="flex justify-center text-warning mb-4">
             <AlertCircle size={48} />
@@ -230,7 +146,7 @@ export default function GateDashboardPage() {
           <p className="text-sm text-gray-400 mb-6">
             Your staff account is currently not assigned to any active exhibition checkpoint gate. Please contact an admin.
           </p>
-          <Button variant="secondary" onClick={loadDashboardData}>
+          <Button variant="secondary" onClick={loadDashboardData} leftIcon={<RefreshCw size={14} />}>
             Refresh Terminal
           </Button>
         </div>
@@ -242,9 +158,20 @@ export default function GateDashboardPage() {
     <ContentWrapper>
       {/* Page Header */}
       <PageHeader
-        title="Gate QR Scanner Terminal"
-        description="Verify entrance QR credentials in real time. Prevents duplicate checks and forged passes."
+        title="Gate Checkpoint Dashboard"
+        description="Shift summary and entrance check-in activity."
         showDivider
+        actions={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => router.push('/gate/scan')}
+            leftIcon={<ScanLine size={18} />}
+            className="font-bold shadow-lg shadow-accent-500/20"
+          >
+            Launch Gate Scanner Terminal
+          </Button>
+        }
       />
 
       {/* Statistics Shift summary cards */}
@@ -266,42 +193,56 @@ export default function GateDashboardPage() {
         />
       </div>
 
-      {/* Scope Selector Bar */}
-      <div className="mb-6 bg-gray-900 border border-gray-800 p-4 rounded-xl max-w-md">
-        <Select
-          label="Select Active Gate Exhibition Scope"
-          value={selectedExhId}
-          onChange={(e) => setSelectedExhId(e.target.value)}
-          options={activeExhibitions.map((e) => ({ label: e.name, value: e.id }))}
-        />
+      {/* Scope Selector & Quick Action Bar */}
+      <div className="mb-8 bg-gray-900 border border-gray-800 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="w-full sm:w-72">
+          <Select
+            label="Active Gate Exhibition Scope"
+            value={selectedExhId}
+            onChange={(e) => setSelectedExhId(e.target.value)}
+            options={activeExhibitions.map((e) => ({ label: e.name, value: e.id }))}
+          />
+        </div>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => router.push('/gate/scan')}
+          leftIcon={<ScanLine size={14} />}
+          className="font-bold text-xs w-full sm:w-auto"
+        >
+          Scan Tickets
+        </Button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3 items-start">
-        {/* Scanner view (Left) */}
-        <div className="lg:col-span-1">
-          {!activeScan ? (
-            <QRScanner onScan={handleScanTrigger} isProcessing={isProcessing} />
-          ) : (
-            <ScanResultCard
-              result={activeScan.result}
-              ticketNumber={activeScan.ticketNumber}
-              ticketType={activeScan.ticketType}
-              customerName={activeScan.customerName}
-              errorDetails={activeScan.errorDetails}
-              scannedAt={activeScan.scannedAt}
-              onReset={() => setActiveScan(null)}
-            />
-          )}
+      {/* Terminal Launch Banner */}
+      <div className="bg-gradient-to-r from-gray-900 via-gray-850 to-gray-900 border border-accent-500/20 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+        <div className="flex items-center gap-4">
+          <div className="h-14 w-14 rounded-2xl bg-accent-500/10 border border-accent-500/30 flex items-center justify-center text-accent-400 shrink-0">
+            <ScanLine size={28} />
+          </div>
+          <div>
+            <h3 className="text-lg font-extrabold text-gray-100">Ready for Entrance Verification?</h3>
+            <p className="text-xs text-gray-400 mt-1">Open the dedicated full-screen camera terminal to scan entrance ticket passes.</p>
+          </div>
         </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => router.push('/gate/scan')}
+          leftIcon={<ScanLine size={18} />}
+          className="shrink-0 font-extrabold shadow-lg shadow-accent-500/20 cursor-pointer"
+        >
+          Open Dedicated Terminal
+        </Button>
+      </div>
 
-        {/* Scan log feed (Right) */}
-        <div className="lg:col-span-2 space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 select-none flex items-center gap-2">
-            <History size={15} className="text-gray-500" />
-            <span>Gate Entrance Logs (Today)</span>
-          </h3>
-          <DataTable columns={columns} data={scans} />
-        </div>
+      {/* Scan Log Feed */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 select-none flex items-center gap-2">
+          <History size={15} className="text-gray-500" />
+          <span>Recent Entrance Checkpoint Logs</span>
+        </h3>
+        <DataTable columns={columns} data={scans} />
       </div>
     </ContentWrapper>
   );

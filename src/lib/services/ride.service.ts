@@ -189,71 +189,68 @@ export const RideService = {
 
     const secret = process.env.QR_HMAC_SECRET || 'dev-qr-secret-only-for-local-development-change-in-production';
 
-    const createdTickets = [];
-    const qrDataUrls = [];
-    let primaryTransactionId = '';
+    // Issue 1 Ride Ticket Bundle per transaction (1 QR code representing total quantity)
+    const ticketNumber = generateTicketNumber('RID');
+    const primaryTransactionId = generateTransactionId('RTX');
+    const tempToken = `temp-ride-${Date.now()}`;
+    const totalAmount = price * quantity;
 
-    // 3. Double-pass creation flow
-    for (let i = 0; i < quantity; i++) {
-      const ticketNumber = generateTicketNumber('RID');
-      const ticketTransactionId = generateTransactionId('RTX');
-      if (i === 0) {
-        primaryTransactionId = ticketTransactionId;
-      }
+    const tDoc = await RideTicketModel.create({
+      ticketNumber,
+      exhibitionId: exhibition._id,
+      rideId: ride._id,
+      ticketType: 'ride',
+      price,
+      qrPayload: tempToken,
+      qrHash: tempToken,
+      status: 'valid',
+      quantity,
+      usedCount: 0,
+      remainingCount: quantity,
+      scanCount: 0,
+      soldBy: user._id,
+      soldAt: new Date(),
+      paymentMethod: data.paymentMethod,
+      paymentStatus: 'paid',
+      customerName: data.customerName?.trim() || undefined,
+      customerPhone: data.customerPhone?.trim() || undefined,
+      metadata: {
+        transactionId: primaryTransactionId,
+        upiTransactionRef: data.upiTransactionRef?.trim() || undefined,
+        notes: data.notes?.trim() || undefined,
+      },
+    });
 
-      const tempToken = `temp-ride-${i}-${Date.now()}`;
+    // Cryptographically sign payload using the document's generated _id
+    const qrPayload = createRideQrPayload(
+      {
+        ticketId: tDoc._id.toString(),
+        exhibitionId: exhibition._id.toString(),
+        rideId: ride._id.toString(),
+        timestamp: Date.now(),
+      },
+      secret
+    );
+    const qrHash = sha256(qrPayload);
 
-      const tDoc = await RideTicketModel.create({
-        ticketNumber,
-        exhibitionId: exhibition._id,
-        rideId: ride._id,
-        ticketType: 'ride',
-        price,
-        qrPayload: tempToken,
-        qrHash: tempToken,
-        status: 'valid',
-        soldBy: user._id,
-        soldAt: new Date(),
-        paymentMethod: data.paymentMethod,
-        paymentStatus: 'paid',
-        customerName: data.customerName?.trim() || undefined,
-        customerPhone: data.customerPhone?.trim() || undefined,
-        metadata: {
-          transactionId: ticketTransactionId,
-          upiTransactionRef: data.upiTransactionRef?.trim() || undefined,
-          notes: data.notes?.trim() || undefined,
-        },
-      });
+    tDoc.qrPayload = qrPayload;
+    tDoc.qrHash = qrHash;
+    await tDoc.save();
 
-      // Cryptographically sign payload using the document's generated _id
-      const qrPayload = createRideQrPayload(
-        {
-          ticketId: tDoc._id.toString(),
-          exhibitionId: exhibition._id.toString(),
-          rideId: ride._id.toString(),
-          timestamp: Date.now(),
-        },
-        secret
-      );
-      const qrHash = sha256(qrPayload);
-
-      tDoc.qrPayload = qrPayload;
-      tDoc.qrHash = qrHash;
-      await tDoc.save();
-
-      const qrDataUrl = await generateQrDataUrl(qrPayload);
-
-      createdTickets.push(tDoc.toJSON());
-      qrDataUrls.push(qrDataUrl);
-    }
+    const qrDataUrl = await generateQrDataUrl(qrPayload);
+    const createdTicketJSON = {
+      ...tDoc.toJSON(),
+      quantity,
+      usedCount: 0,
+      remainingCount: quantity,
+    };
 
     // 4. Create RideSale transaction
-    const totalAmount = price * quantity;
     await RideSaleModel.create({
       transactionId: primaryTransactionId,
       exhibitionId: exhibition._id,
       rideId: ride._id,
-      tickets: createdTickets.map((t: any) => t.id),
+      tickets: [tDoc._id],
       ticketCount: quantity,
       totalAmount,
       paymentMethod: data.paymentMethod,
@@ -273,10 +270,10 @@ export const RideService = {
       performedBy: user._id.toString(),
       performedByRole: user.role,
       targetType: 'ticket',
-      targetId: createdTickets[0].id.toString(),
+      targetId: tDoc._id.toString(),
       exhibitionId: exhibition._id.toString(),
       details: {
-        message: `Sold ${quantity} ride tickets for '${ride.name}'.`,
+        message: `Sold 1 ride ticket bundle (${quantity} entries) for '${ride.name}'.`,
         rideName: ride.name,
         ticketCount: quantity,
         totalAmount,
@@ -285,8 +282,8 @@ export const RideService = {
     });
 
     return {
-      tickets: createdTickets as unknown as RideTicket[],
-      qrDataUrls,
+      tickets: [createdTicketJSON as unknown as RideTicket],
+      qrDataUrls: [qrDataUrl],
     };
   },
 
@@ -508,12 +505,11 @@ export const RideService = {
       };
     }
 
-    if (ticket.status === 'used') {
-      const lastScan = await RideScanModel.findOne({ ticketId: ticket._id, result: 'admitted' }).sort({ scannedAt: -1 });
-      const lastScanStr = lastScan
-        ? `Used at ${new Intl.DateTimeFormat('en-IN', { timeStyle: 'medium' }).format(lastScan.scannedAt)}.`
-        : 'Already used.';
+    const totalQty = ticket.quantity || 1;
+    const prevUsed = ticket.usedCount || 0;
+    const prevRemaining = ticket.remainingCount ?? (totalQty - prevUsed);
 
+    if (ticket.status === 'used' || prevRemaining <= 0) {
       await RideScanModel.create({
         ticketId: ticket._id,
         rideId: ride._id,
@@ -522,7 +518,7 @@ export const RideService = {
         scannedAt: new Date(),
         result: 'rejected_used',
         qrPayloadRaw: qrPayload,
-        reason: 'Ride ticket duplicate entry attempt.',
+        reason: 'Ride ticket bundle already completed. All entries used.',
         gateId: data.gateId,
       });
 
@@ -531,26 +527,70 @@ export const RideService = {
         result: 'rejected_used',
         ticket: ticket.toJSON() as unknown as RideTicket,
         ride: ride.toJSON() as unknown as Ride,
-        message: `Duplicate ticket: ${lastScanStr}`,
+        message: `All ${totalQty} entries on this ride ticket bundle have already been used.`,
       };
     }
 
-    // 6. Admit and mark ticket as used
-    ticket.status = 'used';
-    ticket.usedAt = new Date();
-    ticket.usedBy = staffUser._id;
-    ticket.scanCount = (ticket.scanCount || 0) + 1;
-    await ticket.save();
+    // 6. Calculate admissions count for this scan
+    const requestedAdmitCount = Math.max(1, (data as any).countToAdmit || 1);
+    const countToAdmit = Math.min(requestedAdmitCount, prevRemaining);
+
+    if (countToAdmit <= 0) {
+      return {
+        valid: false,
+        result: 'rejected_used',
+        ticket: ticket.toJSON() as unknown as RideTicket,
+        ride: ride.toJSON() as unknown as Ride,
+        message: `No remaining entries available on this ride ticket bundle.`,
+      };
+    }
+
+    const newUsed = prevUsed + countToAdmit;
+    const newRemaining = prevRemaining - countToAdmit;
+    const nextStatus = newRemaining === 0 ? 'used' : 'partially_used';
+
+    // ATOMIC MONGODB UPDATE WITH GUARD CONDITION
+    const updatedTicket = await RideTicketModel.findOneAndUpdate(
+      {
+        _id: ticket._id,
+        remainingCount: { $gte: countToAdmit },
+        status: { $in: ['valid', 'partially_used'] },
+      },
+      {
+        $inc: { usedCount: countToAdmit, remainingCount: -countToAdmit, scanCount: 1 },
+        $set: {
+          status: nextStatus,
+          usedAt: new Date(),
+          usedBy: staffUser._id,
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedTicket) {
+      return {
+        valid: false,
+        result: 'rejected_used',
+        ticket: ticket.toJSON() as unknown as RideTicket,
+        ride: ride.toJSON() as unknown as Ride,
+        message: `Insufficient remaining entries on ride ticket bundle or concurrent scan detected. Please retry.`,
+      };
+    }
 
     await RideScanModel.create({
-      ticketId: ticket._id,
+      ticketId: updatedTicket._id,
       rideId: ride._id,
       exhibitionId: new mongoose.Types.ObjectId(exhibitionId),
       scannedBy: staffUser._id,
       scannedAt: new Date(),
       result: 'admitted',
       qrPayloadRaw: qrPayload,
-      reason: 'Valid ride ticket scan, access granted.',
+      reason: `Admitted ${countToAdmit} visitor(s) for '${ride.name}'. ${newRemaining} remaining.`,
+      admittedCount: countToAdmit,
+      previousUsedCount: prevUsed,
+      newUsedCount: newUsed,
+      previousRemainingCount: prevRemaining,
+      newRemainingCount: newRemaining,
       gateId: data.gateId,
     });
 
@@ -559,22 +599,30 @@ export const RideService = {
       performedBy: staffUserId,
       performedByRole: staffUser.role,
       targetType: 'ticket',
-      targetId: ticket._id.toString(),
+      targetId: updatedTicket._id.toString(),
       exhibitionId: exhibitionId,
       details: {
-        message: `Validated ride ticket ${ticket.ticketNumber} for ride '${ride.name}'.`,
-        ticketNumber: ticket.ticketNumber,
+        message: `Validated ride ticket ${updatedTicket.ticketNumber} for ride '${ride.name}'. Admitted: ${countToAdmit}.`,
+        ticketNumber: updatedTicket.ticketNumber,
         rideName: ride.name,
+        admittedCount: countToAdmit,
+        previousRemainingCount: prevRemaining,
+        newRemainingCount: newRemaining,
         result: 'admitted',
       },
     });
 
+    const formattedMessage =
+      newRemaining === 0
+        ? `Access Granted! All ${updatedTicket.quantity} visitor(s) admitted for '${ride.name}'. Enjoy!`
+        : `Access Granted! Admitted ${countToAdmit} visitor(s). ${newRemaining} entry(s) remaining on bundle.`;
+
     return {
       valid: true,
       result: 'admitted',
-      ticket: ticket.toJSON() as unknown as RideTicket,
+      ticket: updatedTicket.toJSON() as unknown as RideTicket,
       ride: ride.toJSON() as unknown as Ride,
-      message: 'Access Granted. Enjoy the ride!',
+      message: formattedMessage,
     };
   },
 

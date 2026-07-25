@@ -33,7 +33,7 @@ export const EXHIBITION_STATUSES = ['draft', 'upcoming', 'active', 'paused', 'co
 export type ExhibitionStatus = (typeof EXHIBITION_STATUSES)[number];
 
 // ── Ticket Statuses ──
-export const TICKET_STATUSES = ['valid', 'used', 'cancelled', 'expired'] as const;
+export const TICKET_STATUSES = ['valid', 'partially_used', 'used', 'cancelled', 'expired'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
 // ── Payment Methods ──

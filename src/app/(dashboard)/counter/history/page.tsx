@@ -619,7 +619,10 @@ export default function SalesHistoryPage() {
                     ? (createdTickets[currentTicketIndex]?.rideId?.name || 'Ride')
                     : (createdTickets[currentTicketIndex]?.ticketType || 'General')
                 }
-                price={createdTickets[currentTicketIndex]?.price}
+                price={(createdTickets[currentTicketIndex]?.price || 0) * (createdTickets[currentTicketIndex]?.quantity || 1)}
+                quantity={createdTickets[currentTicketIndex]?.quantity || 1}
+                usedCount={createdTickets[currentTicketIndex]?.usedCount || 0}
+                remainingCount={createdTickets[currentTicketIndex]?.remainingCount ?? (createdTickets[currentTicketIndex]?.quantity || 1)}
                 exhibitionName={activeExhibitionName}
               />
             </div>
@@ -637,7 +640,10 @@ export default function SalesHistoryPage() {
                         ? (ticket.rideId?.name || 'Ride')
                         : (ticket.ticketType || 'General')
                     }
-                    price={ticket.price}
+                    price={(ticket.price || 0) * (ticket.quantity || 1)}
+                    quantity={ticket.quantity || 1}
+                    usedCount={ticket.usedCount || 0}
+                    remainingCount={ticket.remainingCount ?? (ticket.quantity || 1)}
                     exhibitionName={activeExhibitionName}
                   />
                 </div>

@@ -11,6 +11,11 @@ export interface ITicketScan extends Document {
   reason?: string;
   ticketStatusBefore?: string;
   ticketStatusAfter?: string;
+  admittedCount?: number;
+  previousUsedCount?: number;
+  newUsedCount?: number;
+  previousRemainingCount?: number;
+  newRemainingCount?: number;
   deviceInfo?: string;
   gateId?: string;
   location?: {
@@ -25,6 +30,14 @@ const TicketScanSchema = new Schema<ITicketScan>(
       type: Schema.Types.ObjectId,
       ref: 'Ticket',
     },
+    admittedCount: {
+      type: Number,
+      default: 1,
+    },
+    previousUsedCount: Number,
+    newUsedCount: Number,
+    previousRemainingCount: Number,
+    newRemainingCount: Number,
     exhibitionId: {
       type: Schema.Types.ObjectId,
       ref: 'Exhibition',
@@ -86,5 +99,8 @@ TicketScanSchema.index({ scannedBy: 1, scannedAt: -1 });
 TicketScanSchema.index({ exhibitionId: 1, scannedAt: -1 });
 TicketScanSchema.index({ exhibitionId: 1, result: 1 });
 
-export const TicketScan =
-  mongoose.models.TicketScan || mongoose.model<ITicketScan>('TicketScan', TicketScanSchema);
+if (mongoose.models && mongoose.models.TicketScan) {
+  delete (mongoose.models as any).TicketScan;
+}
+
+export const TicketScan = mongoose.model<ITicketScan>('TicketScan', TicketScanSchema);

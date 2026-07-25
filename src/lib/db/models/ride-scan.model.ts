@@ -9,6 +9,11 @@ export interface IRideScan extends Document {
   result: 'admitted' | 'rejected_used' | 'rejected_wrong_ride' | 'rejected_invalid' | 'rejected_unknown' | 'rejected_closed';
   qrPayloadRaw: string;
   reason?: string;
+  admittedCount?: number;
+  previousUsedCount?: number;
+  newUsedCount?: number;
+  previousRemainingCount?: number;
+  newRemainingCount?: number;
   gateId?: string;
 }
 
@@ -18,6 +23,14 @@ const RideScanSchema = new Schema<IRideScan>(
       type: Schema.Types.ObjectId,
       ref: 'RideTicket',
     },
+    admittedCount: {
+      type: Number,
+      default: 1,
+    },
+    previousUsedCount: Number,
+    newUsedCount: Number,
+    previousRemainingCount: Number,
+    newRemainingCount: Number,
     rideId: {
       type: Schema.Types.ObjectId,
       ref: 'Ride',
@@ -72,5 +85,8 @@ RideScanSchema.index({ rideId: 1, scannedAt: -1 });
 RideScanSchema.index({ scannedBy: 1, scannedAt: -1 });
 RideScanSchema.index({ exhibitionId: 1, scannedAt: -1 });
 
-export const RideScan =
-  mongoose.models.RideScan || mongoose.model<IRideScan>('RideScan', RideScanSchema);
+if (mongoose.models && mongoose.models.RideScan) {
+  delete (mongoose.models as any).RideScan;
+}
+
+export const RideScan = mongoose.model<IRideScan>('RideScan', RideScanSchema);
