@@ -22,6 +22,8 @@ export default function AdminRidesPage() {
   const [isLoadingExhibitions, setIsLoadingExhibitions] = React.useState(true);
   const [isLoadingRides, setIsLoadingRides] = React.useState(false);
   const [search, setSearch] = React.useState('');
+  const [startDate, setStartDate] = React.useState('');
+  const [endDate, setEndDate] = React.useState('');
 
   // 1. Fetch all exhibitions
   React.useEffect(() => {
@@ -50,7 +52,7 @@ export default function AdminRidesPage() {
     loadExhibitions();
   }, [addToast]);
 
-  // 2. Fetch rides and stats when selectedExhibitionId changes
+  // 2. Fetch rides and stats when selectedExhibitionId or date filters change
   const fetchRidesAndStats = React.useCallback(async () => {
     if (!selectedExhibitionId) return;
     setIsLoadingRides(true);
@@ -60,8 +62,12 @@ export default function AdminRidesPage() {
       if (!ridesRes.ok) throw new Error('Failed to fetch rides');
       const ridesBody = await ridesRes.json();
       
-      // Fetch stats
-      const statsRes = await fetch(`/api/dashboard/ride-stats?exhibitionId=${selectedExhibitionId}`);
+      // Fetch stats with date filters
+      let statsUrl = `/api/dashboard/ride-stats?exhibitionId=${selectedExhibitionId}`;
+      if (startDate) statsUrl += `&startDate=${encodeURIComponent(startDate)}`;
+      if (endDate) statsUrl += `&endDate=${encodeURIComponent(endDate)}`;
+
+      const statsRes = await fetch(statsUrl);
       if (!statsRes.ok) throw new Error('Failed to fetch stats');
       const statsBody = await statsRes.json();
 
@@ -78,7 +84,7 @@ export default function AdminRidesPage() {
     } finally {
       setIsLoadingRides(false);
     }
-  }, [selectedExhibitionId, addToast]);
+  }, [selectedExhibitionId, startDate, endDate, addToast]);
 
   React.useEffect(() => {
     fetchRidesAndStats();
@@ -183,26 +189,64 @@ export default function AdminRidesPage() {
         </div>
       </div>
 
-      {/* Exhibition Selection */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 md:p-5 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <Filter size={18} className="text-accent-400 shrink-0" />
-          <span className="text-sm font-semibold text-gray-300 shrink-0">Exhibition Scope:</span>
-          <Select
-            value={selectedExhibitionId}
-            onChange={(e) => setSelectedExhibitionId(e.target.value)}
-            options={exhOptions}
-            className="w-full md:w-80"
-          />
+      {/* Exhibition Scope & Date Filters */}
+      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 md:p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider select-none">
+            <Filter size={14} className="text-accent-400" />
+            <span>Exhibition Scope & Date Filters</span>
+          </div>
+          {(startDate || endDate || search) && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setStartDate(''); setEndDate(''); setSearch(''); }}
+              className="h-7 px-2.5 flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200"
+            >
+              <span>Clear Filters</span>
+            </Button>
+          )}
         </div>
-        <div className="w-full md:w-72">
-          <Input
-            placeholder="Search rides by name..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            leftIcon={<Search size={16} />}
-            className="h-10"
-          />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <Select
+              value={selectedExhibitionId}
+              onChange={(e) => setSelectedExhibitionId(e.target.value)}
+              options={exhOptions}
+              className="w-full h-10"
+            />
+          </div>
+
+          <div>
+            <Input
+              placeholder="Search rides by name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              leftIcon={<Search size={16} />}
+              className="w-full h-10"
+            />
+          </div>
+
+          <div>
+            <Input
+              type="date"
+              placeholder="Start Date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full h-10 text-xs"
+            />
+          </div>
+
+          <div>
+            <Input
+              type="date"
+              placeholder="End Date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full h-10 text-xs"
+            />
+          </div>
         </div>
       </div>
 

@@ -30,6 +30,8 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search') || undefined;
     const status = searchParams.get('status') || undefined;
     const ticketType = searchParams.get('ticketType') || undefined;
+    const startDate = searchParams.get('startDate') || undefined;
+    const endDate = searchParams.get('endDate') || undefined;
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)));
 
@@ -45,6 +47,8 @@ export async function GET(req: NextRequest) {
       search,
       status,
       ticketType,
+      startDate,
+      endDate,
     });
 
     return successResponse(result);

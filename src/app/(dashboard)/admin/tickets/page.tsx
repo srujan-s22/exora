@@ -2,20 +2,20 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Search, Plus, X, Filter, Ticket, Eye, Ban } from 'lucide-react';
+import { Search, Plus, X, Filter, Ticket, Eye, IndianRupee, QrCode, ShieldCheck, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { Pagination } from '@/components/ui/pagination';
 import { useToast } from '@/components/providers/toast-provider';
 import type { Ticket as TicketType } from '@/types/ticket.types';
 import type { Exhibition } from '@/types/exhibition.types';
-import type { PaginationMeta, ApiSuccessResponse } from '@/types/api.types';
-import type { TableColumn } from '@/types/ui.types';
-import type { BadgeVariant } from '@/types/ui.types';
+import type { PaginationMeta } from '@/types/api.types';
+import type { TableColumn, BadgeVariant } from '@/types/ui.types';
 
 const statusVariant: Record<string, BadgeVariant> = {
   valid: 'success',
@@ -43,6 +43,13 @@ export default function AdminTicketsPage() {
   const { addToast } = useToast();
   const [tickets, setTickets] = React.useState<TicketType[]>([]);
   const [exhibitions, setExhibitions] = React.useState<Exhibition[]>([]);
+  const [summaryStats, setSummaryStats] = React.useState({
+    totalTickets: 0,
+    totalRevenue: 0,
+    validCount: 0,
+    usedCount: 0,
+  });
+
   const [pagination, setPagination] = React.useState<PaginationMeta>({
     page: 1,
     limit: 20,
@@ -55,6 +62,8 @@ export default function AdminTicketsPage() {
   const [search, setSearch] = React.useState('');
   const [status, setStatus] = React.useState('');
   const [ticketType, setTicketType] = React.useState('');
+  const [startDate, setStartDate] = React.useState('');
+  const [endDate, setEndDate] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(true);
   const [currentPage, setCurrentPage] = React.useState(1);
 
@@ -85,7 +94,7 @@ export default function AdminTicketsPage() {
     loadExhibitions();
   }, []);
 
-  // Fetch tickets
+  // Fetch tickets & stats
   const fetchTickets = React.useCallback(async () => {
     setIsLoading(true);
     try {
@@ -98,14 +107,19 @@ export default function AdminTicketsPage() {
       if (debouncedSearch) queryParams.append('search', debouncedSearch);
       if (status) queryParams.append('status', status);
       if (ticketType) queryParams.append('ticketType', ticketType);
+      if (startDate) queryParams.append('startDate', startDate);
+      if (endDate) queryParams.append('endDate', endDate);
 
       const res = await fetch(`/api/tickets?${queryParams.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch tickets');
 
-      const body: ApiSuccessResponse<{ data: TicketType[]; pagination: PaginationMeta }> = await res.json();
+      const body = await res.json();
       if (body.success) {
         setTickets(body.data.data);
         setPagination(body.data.pagination);
+        if (body.data.stats) {
+          setSummaryStats(body.data.stats);
+        }
       }
     } catch (err: any) {
       addToast({
@@ -116,7 +130,7 @@ export default function AdminTicketsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, exhibitionId, debouncedSearch, status, ticketType, addToast]);
+  }, [currentPage, exhibitionId, debouncedSearch, status, ticketType, startDate, endDate, addToast]);
 
   React.useEffect(() => {
     fetchTickets();
@@ -127,10 +141,12 @@ export default function AdminTicketsPage() {
     setStatus('');
     setTicketType('');
     setExhibitionId('');
+    setStartDate('');
+    setEndDate('');
     setCurrentPage(1);
   };
 
-  const hasFilters = search || status || ticketType || exhibitionId;
+  const hasFilters = search || status || ticketType || exhibitionId || startDate || endDate;
 
   const statuses = [
     { label: 'All Statuses', value: '' },
@@ -207,7 +223,7 @@ export default function AdminTicketsPage() {
     {
       key: 'actions',
       label: '',
-      className: 'w-10',
+      className: 'w-10 text-right',
       render: (_val, row) => (
         <Link
           href={`/admin/tickets/${row.id}`}
@@ -222,99 +238,168 @@ export default function AdminTicketsPage() {
 
   return (
     <div className="space-y-6 flex flex-col flex-1">
-      {/* Header */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-50">Tickets Workspace</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-50 flex items-center gap-2">
+            <Ticket className="text-accent-400" />
+            <span>Tickets Admin Console</span>
+          </h1>
           <p className="mt-1 text-sm text-gray-400">
-            Browse, search, and manage all generated tickets across exhibitions.
+            Browse, search, view details, and track real-time ticketing analytics across exhibitions.
           </p>
         </div>
-        <Link href="/admin/tickets/new" passHref>
-          <Button className="shrink-0 flex items-center gap-1.5 font-semibold">
-            <Plus size={16} />
-            <span>Generate Tickets</span>
-          </Button>
-        </Link>
+        <div className="flex gap-3">
+          <Link href="/admin/tickets/new" passHref>
+            <Button className="shrink-0 flex items-center gap-1.5 font-semibold">
+              <Plus size={16} />
+              <span>Generate Tickets</span>
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {/* Filters */}
+      {/* Exhibition Scope & Search/Date Filters */}
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 md:p-5 space-y-4">
-        <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider select-none">
-          <Filter size={12} className="text-accent-400" />
-          <span>Search & Filter Controls</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider select-none">
+            <Filter size={14} className="text-accent-400" />
+            <span>Exhibition Scope & Date Filters</span>
+          </div>
+          {hasFilters && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleClearFilters}
+              className="h-7 px-2.5 flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200"
+            >
+              <X size={12} />
+              <span>Clear Filters</span>
+            </Button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Input
-            placeholder="Search by ticket #, customer..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            leftIcon={<Search size={16} />}
-            className="w-full h-10"
-          />
-
-          <Select
-            value={exhibitionId}
-            onChange={(e) => { setExhibitionId(e.target.value); setCurrentPage(1); }}
-            options={exhibitionOptions}
-            className="w-full"
-          />
-
-          <Select
-            value={status}
-            onChange={(e) => { setStatus(e.target.value); setCurrentPage(1); }}
-            options={statuses}
-            className="w-full"
-          />
-
-          <div className="flex items-center gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div>
             <Input
-              placeholder="Filter by class..."
-              value={ticketType}
-              onChange={(e) => setTicketType(e.target.value)}
-              className="flex-1 h-10"
+              placeholder="Search ticket #, customer..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              leftIcon={<Search size={16} />}
+              className="w-full h-10"
             />
-            {hasFilters && (
-              <Button
-                variant="secondary"
-                onClick={handleClearFilters}
-                className="h-10 px-3 shrink-0 flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200"
-              >
-                <X size={14} />
-                <span className="hidden sm:inline">Clear</span>
-              </Button>
-            )}
+          </div>
+
+          <div>
+            <Select
+              value={exhibitionId}
+              onChange={(e) => { setExhibitionId(e.target.value); setCurrentPage(1); }}
+              options={exhibitionOptions}
+              className="w-full h-10"
+            />
+          </div>
+
+          <div>
+            <Select
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setCurrentPage(1); }}
+              options={statuses}
+              className="w-full h-10"
+            />
+          </div>
+
+          <div>
+            <div className="relative">
+              <Input
+                type="date"
+                placeholder="Start Date"
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
+                className="w-full h-10 text-xs"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="relative">
+              <Input
+                type="date"
+                placeholder="End Date"
+                value={endDate}
+                onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
+                className="w-full h-10 text-xs"
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Stats bar */}
-      <div className="flex items-center gap-6 text-xs text-gray-400">
-        <span className="flex items-center gap-1.5">
-          <Ticket size={13} className="text-accent-500" />
-          <span className="font-semibold text-gray-200">{pagination.total.toLocaleString()}</span> tickets total
-        </span>
-        {pagination.totalPages > 1 && (
-          <span>Page {currentPage} of {pagination.totalPages}</span>
-        )}
+      {/* Revenue & Ticket Stats Summary Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <Card className="bg-gray-900 border-gray-800">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 bg-accent-500/10 rounded-lg text-accent-400 border border-accent-500/20">
+              <Ticket size={24} />
+            </div>
+            <div>
+              <span className="text-xs text-gray-400 font-medium">Total Tickets</span>
+              <h3 className="text-2xl font-bold text-gray-150 mt-1">{summaryStats.totalTickets}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-900 border-gray-800">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 bg-success/10 rounded-lg text-success border border-success/20">
+              <IndianRupee size={24} />
+            </div>
+            <div>
+              <span className="text-xs text-gray-400 font-medium">Total Ticket Revenue</span>
+              <h3 className="text-2xl font-bold text-gray-150 mt-1">
+                ₹{(summaryStats.totalRevenue / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-900 border-gray-800">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 bg-warning/10 rounded-lg text-warning border border-warning/20">
+              <ShieldCheck size={24} />
+            </div>
+            <div>
+              <span className="text-xs text-gray-400 font-medium">Valid Passes</span>
+              <h3 className="text-2xl font-bold text-gray-150 mt-1">{summaryStats.validCount}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-900 border-gray-800">
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-3 bg-info/10 rounded-lg text-blue-400 border border-blue-500/20">
+              <QrCode size={24} />
+            </div>
+            <div>
+              <span className="text-xs text-gray-400 font-medium">Used Entry Scans</span>
+              <h3 className="text-2xl font-bold text-gray-150 mt-1">{summaryStats.usedCount}</h3>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Table */}
+      {/* Main Tickets Listing Table */}
       {isLoading ? (
-        <div className="flex flex-1 items-center justify-center py-24">
+        <div className="flex flex-1 items-center justify-center py-20">
           <Spinner size="lg" className="text-accent-500" />
         </div>
       ) : tickets.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center py-20 border border-dashed border-gray-800 rounded-xl bg-gray-900/10 p-8 text-center">
-          <div className="h-12 w-12 rounded-xl bg-gray-800 border border-gray-700/50 flex items-center justify-center text-gray-500 mb-4 select-none">
-            <Ticket size={22} />
-          </div>
-          <h3 className="text-base font-bold text-gray-200">No Tickets Found</h3>
+        <div className="flex flex-col items-center justify-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/10 p-8 text-center">
+          <Ticket size={40} className="text-gray-600 mb-3 animate-pulse" />
+          <h3 className="text-base font-bold text-gray-300">No Tickets Found</h3>
           <p className="mt-1 text-sm text-gray-400 max-w-sm">
             {hasFilters
-              ? "No tickets match your current filters. Try adjusting your search."
-              : "No tickets have been generated yet. Click 'Generate Tickets' to create a batch."}
+              ? "No tickets match your current search and date filters. Try resetting filters."
+              : "No admission tickets have been generated yet. Click 'Generate Tickets' to create a batch."}
           </p>
           {hasFilters && (
             <Button
@@ -328,7 +413,9 @@ export default function AdminTicketsPage() {
         </div>
       ) : (
         <div className="space-y-4 flex-1 flex flex-col justify-between">
-          <DataTable columns={columns} data={tickets} />
+          <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+            <DataTable columns={columns} data={tickets} />
+          </div>
 
           {pagination.totalPages > 1 && (
             <div className="pt-4 border-t border-gray-850">

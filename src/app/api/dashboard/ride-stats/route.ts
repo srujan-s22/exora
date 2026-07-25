@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const rideId = searchParams.get('rideId');
     const exhibitionId = searchParams.get('exhibitionId');
+    const startDate = searchParams.get('startDate') || undefined;
+    const endDate = searchParams.get('endDate') || undefined;
     const staffDashboard = searchParams.get('staffDashboard') === 'true';
 
     if (staffDashboard) {
@@ -39,13 +41,13 @@ export async function GET(req: NextRequest) {
     }
 
     if (rideId) {
-      const stats = await RideService.getStats(rideId);
+      const stats = await RideService.getStats(rideId, startDate, endDate);
       return successResponse(stats);
     }
 
     if (exhibitionId) {
       const rides = await RideService.list({ exhibitionId });
-      const statsPromises = rides.map(r => RideService.getStats(r.id));
+      const statsPromises = rides.map(r => RideService.getStats(r.id, startDate, endDate));
       const allStats = await Promise.all(statsPromises);
       return successResponse(allStats);
     }

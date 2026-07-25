@@ -661,23 +661,44 @@ export const RideService = {
     };
   },
 
-  async getStats(rideId: string): Promise<Record<string, any>> {
+  async getStats(rideId: string, startDate?: string, endDate?: string): Promise<Record<string, any>> {
     await connectToDatabase();
     const rideObjectId = new mongoose.Types.ObjectId(rideId);
 
     const ride = await RideModel.findById(rideId);
     if (!ride) throw new Error('Ride not found');
 
-    const ticketsSold = await RideTicketModel.countDocuments({ rideId: rideObjectId, status: { $ne: 'cancelled' } });
+    const ticketQuery: Record<string, any> = { rideId: rideObjectId, status: { $ne: 'cancelled' } };
+    const saleQuery: Record<string, any> = { rideId: rideObjectId, status: { $ne: 'cancelled' } };
+    const scanQuery: Record<string, any> = { rideId: rideObjectId };
+
+    if (startDate || endDate) {
+      const dateFilter: Record<string, any> = {};
+      if (startDate) {
+        const sDate = new Date(startDate);
+        sDate.setHours(0, 0, 0, 0);
+        dateFilter.$gte = sDate;
+      }
+      if (endDate) {
+        const eDate = new Date(endDate);
+        eDate.setHours(23, 59, 59, 999);
+        dateFilter.$lte = eDate;
+      }
+      ticketQuery.createdAt = dateFilter;
+      saleQuery.soldAt = dateFilter;
+      scanQuery.scannedAt = dateFilter;
+    }
+
+    const ticketsSold = await RideTicketModel.countDocuments(ticketQuery);
 
     const revenueResult = await RideSaleModel.aggregate([
-      { $match: { rideId: rideObjectId, status: { $ne: 'cancelled' } } },
+      { $match: saleQuery },
       { $group: { _id: null, total: { $sum: '$totalAmount' } } },
     ]);
     const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
 
-    const totalScans = await RideScanModel.countDocuments({ rideId: rideObjectId });
-    const admittedCount = await RideScanModel.countDocuments({ rideId: rideObjectId, result: 'admitted' });
+    const totalScans = await RideScanModel.countDocuments(scanQuery);
+    const admittedCount = await RideScanModel.countDocuments({ ...scanQuery, result: 'admitted' });
     const rejectedCount = totalScans - admittedCount;
 
     return {

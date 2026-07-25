@@ -574,7 +574,10 @@ export const TicketService = {
     return rideDoc ? (rideDoc.toJSON() as unknown as any) : null;
   },
 
-  async listByExhibition(exhibitionId: string, params: PaginationParams & { search?: string; status?: string; ticketType?: string }): Promise<{ data: Ticket[]; pagination: PaginationMeta }> {
+  async listByExhibition(
+    exhibitionId: string,
+    params: PaginationParams & { search?: string; status?: string; ticketType?: string; startDate?: string; endDate?: string }
+  ): Promise<{ data: Ticket[]; pagination: PaginationMeta; stats: { totalTickets: number; totalRevenue: number; validCount: number; usedCount: number } }> {
     await connectToDatabase();
 
     const page = params.page || 1;
@@ -592,6 +595,20 @@ export const TicketService = {
 
     if (params.ticketType) {
       query.ticketType = params.ticketType;
+    }
+
+    if (params.startDate || params.endDate) {
+      query.soldAt = {};
+      if (params.startDate) {
+        const sDate = new Date(params.startDate);
+        sDate.setHours(0, 0, 0, 0);
+        query.soldAt.$gte = sDate;
+      }
+      if (params.endDate) {
+        const eDate = new Date(params.endDate);
+        eDate.setHours(23, 59, 59, 999);
+        query.soldAt.$lte = eDate;
+      }
     }
 
     if (params.search) {
@@ -613,6 +630,15 @@ export const TicketService = {
 
     const totalPages = Math.ceil(total / limit);
 
+    // Compute summary stats for current filter scope
+    const totalRevenueResult = await TicketModel.aggregate([
+      { $match: { ...query, status: { $ne: 'cancelled' } } },
+      { $group: { _id: null, total: { $sum: '$price' } } },
+    ]);
+    const totalRevenue = totalRevenueResult[0]?.total || 0;
+    const validCount = await TicketModel.countDocuments({ ...query, status: 'valid' });
+    const usedCount = await TicketModel.countDocuments({ ...query, status: 'used' });
+
     return {
       data: docs.map((d) => d.toJSON() as unknown as Ticket),
       pagination: {
@@ -621,6 +647,12 @@ export const TicketService = {
         limit,
         totalPages,
         hasMore: page < totalPages,
+      },
+      stats: {
+        totalTickets: total,
+        totalRevenue,
+        validCount,
+        usedCount,
       },
     };
   },
