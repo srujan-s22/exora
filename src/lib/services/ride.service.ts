@@ -187,31 +187,21 @@ export const RideService = {
     const price = ride.price; // in paise
     const quantity = data.quantity || 1;
 
-    // 2. Fetch daily sequences for human-readable IDs
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-
-    const ticketsToday = await RideTicketModel.countDocuments({
-      createdAt: { $gte: startOfToday, $lte: endOfToday },
-    });
-
-    const salesToday = await RideSaleModel.countDocuments({
-      soldAt: { $gte: startOfToday, $lte: endOfToday },
-    });
-
-    const transactionId = generateTicketNumber('RTX', salesToday + 1);
     const secret = process.env.QR_HMAC_SECRET || 'dev-qr-secret-only-for-local-development-change-in-production';
 
     const createdTickets = [];
     const qrDataUrls = [];
+    let primaryTransactionId = '';
 
     // 3. Double-pass creation flow
     for (let i = 0; i < quantity; i++) {
-      const sequence = ticketsToday + i + 1;
-      const ticketNumber = generateTicketNumber('RID', sequence);
-      const tempToken = `temp-ride-${sequence}-${Date.now()}`;
+      const ticketNumber = generateTicketNumber('RID');
+      const ticketTransactionId = generateTransactionId('RTX');
+      if (i === 0) {
+        primaryTransactionId = ticketTransactionId;
+      }
+
+      const tempToken = `temp-ride-${i}-${Date.now()}`;
 
       const tDoc = await RideTicketModel.create({
         ticketNumber,
@@ -229,7 +219,7 @@ export const RideService = {
         customerName: data.customerName?.trim() || undefined,
         customerPhone: data.customerPhone?.trim() || undefined,
         metadata: {
-          transactionId,
+          transactionId: ticketTransactionId,
           upiTransactionRef: data.upiTransactionRef?.trim() || undefined,
           notes: data.notes?.trim() || undefined,
         },
@@ -260,7 +250,7 @@ export const RideService = {
     // 4. Create RideSale transaction
     const totalAmount = price * quantity;
     await RideSaleModel.create({
-      transactionId,
+      transactionId: primaryTransactionId,
       exhibitionId: exhibition._id,
       rideId: ride._id,
       tickets: createdTickets.map((t: any) => t.id),
@@ -290,7 +280,7 @@ export const RideService = {
         rideName: ride.name,
         ticketCount: quantity,
         totalAmount,
-        transactionId,
+        transactionId: primaryTransactionId,
       },
     });
 

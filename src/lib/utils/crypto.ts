@@ -55,27 +55,41 @@ export function generateRandomToken(byteLength: number = 32): string {
 }
 
 /**
- * Generate a unique ticket number.
- * Format: EXH-YYYYMMDD-NNNNN
+ * Generate a random alphanumeric string of specified length using crypto.randomBytes.
+ * Excludes ambiguous characters (0, O, 1, I) for readability.
  */
-export function generateTicketNumber(prefix: string, sequence: number): string {
+export function generateRandomCode(length: number = 6): string {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const bytes = randomBytes(length);
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars[bytes[i] % chars.length];
+  }
+  return result;
+}
+
+/**
+ * Generate a unique, unguessable random ticket number.
+ * Format: PREFIX-YYYYMMDD-XXXXXX (e.g., EXH-20260725-8K9F2P, RID-20260725-3M7N4W)
+ */
+export function generateTicketNumber(prefix: string): string {
   const date = new Date();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   const dateStr = `${year}${month}${day}`;
-  const seqStr = String(sequence).padStart(5, '0');
-  return `${prefix}-${dateStr}-${seqStr}`;
+  const randomCode = generateRandomCode(6);
+  return `${prefix}-${dateStr}-${randomCode}`;
 }
 
 import jwt from 'jsonwebtoken';
 
 /**
- * Generate a unique transaction ID.
- * Format: TXN-YYYYMMDD-NNNNN
+ * Generate a unique, unguessable random transaction ID.
+ * Format: TXN-YYYYMMDD-XXXXXX or RTX-YYYYMMDD-XXXXXX
  */
-export function generateTransactionId(sequence: number): string {
-  return generateTicketNumber('TXN', sequence);
+export function generateTransactionId(prefix: string = 'TXN'): string {
+  return generateTicketNumber(prefix);
 }
 
 /**

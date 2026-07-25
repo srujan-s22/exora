@@ -69,32 +69,21 @@ export const TicketService = {
       }
     }
 
-    // 5. Sequence calculations for unique human-readable ticket numbers
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-
-    const ticketsToday = await TicketModel.countDocuments({
-      createdAt: { $gte: startOfToday, $lte: endOfToday },
-    });
-
-    const salesToday = await SaleModel.countDocuments({
-      soldAt: { $gte: startOfToday, $lte: endOfToday },
-    });
-
-    const transactionId = generateTransactionId(salesToday + 1);
     const secret = process.env.QR_HMAC_SECRET || 'dev-qr-secret-only-for-local-development-change-in-production';
 
     const createdTickets = [];
     const qrDataUrls = [];
+    let primaryTransactionId = '';
 
     // Create tickets double-pass flow inside a loop to ensure payload uses generated MongoDB _id
     for (let i = 0; i < quantity; i++) {
-      const sequence = ticketsToday + i + 1;
-      const ticketNumber = generateTicketNumber('EXH', sequence);
+      const ticketNumber = generateTicketNumber('EXH');
+      const ticketTransactionId = generateTransactionId('TXN');
+      if (i === 0) {
+        primaryTransactionId = ticketTransactionId;
+      }
       
-      const tempToken = `temp-${sequence}-${Date.now()}`;
+      const tempToken = `temp-${i}-${Date.now()}`;
 
       const tDoc = await TicketModel.create({
         ticketNumber,
@@ -115,7 +104,7 @@ export const TicketService = {
         customerPhone: data.customerPhone?.trim() || undefined,
         metadata: {
           notes: data.notes?.trim() || undefined,
-          transactionId,
+          transactionId: ticketTransactionId,
           upiTransactionRef: data.upiTransactionRef?.trim() || undefined,
         },
       });
@@ -146,7 +135,7 @@ export const TicketService = {
     // 6. Create the unified Sale transaction record
     const totalAmount = price * quantity;
     await SaleModel.create({
-      transactionId,
+      transactionId: primaryTransactionId,
       exhibitionId: exhibition._id,
       tickets: createdTickets.map((t) => t.id),
       ticketCount: quantity,
@@ -178,7 +167,7 @@ export const TicketService = {
         ticketCount: quantity,
         ticketType: tType.name,
         totalAmount,
-        transactionId,
+        transactionId: primaryTransactionId,
       },
     });
 
