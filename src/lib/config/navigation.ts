@@ -43,6 +43,7 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
     {
       title: 'Analytics & Controls',
       items: [
+        { label: 'Analytics Console', href: '/admin/analytics', icon: 'LineChart' },
         { label: 'Reports', href: '/admin/reports', icon: 'BarChart3' },
         { label: 'Fraud & Alerts', href: '/admin/fraud', icon: 'ShieldAlert' },
         { label: 'Sales vs Entry Check', href: '/admin/reconciliation', icon: 'Scale' },
@@ -82,6 +83,7 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
     {
       title: 'Analytics & Controls',
       items: [
+        { label: 'Analytics Console', href: '/admin/analytics', icon: 'LineChart' },
         { label: 'Reports', href: '/admin/reports', icon: 'BarChart3' },
         { label: 'Fraud & Alerts', href: '/admin/fraud', icon: 'ShieldAlert' },
         { label: 'Sales vs Entry Check', href: '/admin/reconciliation', icon: 'Scale' },
