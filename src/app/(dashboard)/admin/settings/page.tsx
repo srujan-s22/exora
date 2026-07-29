@@ -4,7 +4,7 @@ import * as React from 'react';
 import {
   User, Settings, Monitor, Lock, Mail, Heading,
   Volume2, VolumeX, RefreshCw, Save, ShieldAlert,
-  HelpCircle, UserCheck, Key, Shield, Info,
+  HelpCircle, UserCheck, Key, Shield, Info, Printer, Eye, Sliders,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ContentWrapper } from '@/components/layout/content-wrapper';
@@ -15,6 +15,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
+import { QRDisplay } from '@/components/shared/qr-display';
+import type { IPrintConfig } from '@/lib/db/models/system-settings.model';
 
 type ActiveTab = 'profile' | 'system' | 'client';
 
@@ -51,6 +53,88 @@ export default function SettingsPage() {
   });
   const [systemErrors, setSystemErrors] = React.useState<Record<string, string>>({});
   const [isSavingSystem, setIsSavingSystem] = React.useState(false);
+
+  // Ticket Print Configuration State
+  const [printForm, setPrintForm] = React.useState<IPrintConfig>({
+    paperType: 'thermal_80mm',
+    layoutMode: 'thermal',
+    paperWidth: 80,
+    paperHeight: 0,
+    unit: 'mm',
+    orientation: 'portrait',
+    marginTop: 2,
+    marginRight: 2,
+    marginBottom: 2,
+    marginLeft: 2,
+    ticketPadding: 4,
+    qrSize: 48,
+    fontScale: 1.0,
+    showLogo: true,
+    showFooter: true,
+    compactMode: true,
+  });
+
+  // Apply paper preset defaults
+  const handleApplyPreset = (preset: 'thermal_80mm' | 'thermal_58mm' | 'a4' | 'custom') => {
+    if (preset === 'thermal_80mm') {
+      setPrintForm((p) => ({
+        ...p,
+        paperType: 'thermal_80mm',
+        layoutMode: 'thermal',
+        paperWidth: 80,
+        paperHeight: 0,
+        unit: 'mm',
+        marginTop: 2,
+        marginRight: 2,
+        marginBottom: 2,
+        marginLeft: 2,
+        ticketPadding: 4,
+        qrSize: 48,
+        fontScale: 1.0,
+        compactMode: true,
+      }));
+    } else if (preset === 'thermal_58mm') {
+      setPrintForm((p) => ({
+        ...p,
+        paperType: 'thermal_58mm',
+        layoutMode: 'thermal',
+        paperWidth: 58,
+        paperHeight: 0,
+        unit: 'mm',
+        marginTop: 1,
+        marginRight: 1,
+        marginBottom: 1,
+        marginLeft: 1,
+        ticketPadding: 2,
+        qrSize: 36,
+        fontScale: 0.85,
+        compactMode: true,
+      }));
+    } else if (preset === 'a4') {
+      setPrintForm((p) => ({
+        ...p,
+        paperType: 'a4',
+        layoutMode: 'a4',
+        paperWidth: 210,
+        paperHeight: 297,
+        unit: 'mm',
+        marginTop: 10,
+        marginRight: 10,
+        marginBottom: 10,
+        marginLeft: 10,
+        ticketPadding: 8,
+        qrSize: 64,
+        fontScale: 1.1,
+        compactMode: false,
+      }));
+    } else {
+      setPrintForm((p) => ({
+        ...p,
+        paperType: 'custom',
+        layoutMode: 'custom',
+      }));
+    }
+  };
 
   // Client/Local Settings State
   const [clientForm, setClientForm] = React.useState({
@@ -97,6 +181,9 @@ export default function SettingsPage() {
                 day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
               }),
             });
+            if (s.printConfig) {
+              setPrintForm(s.printConfig);
+            }
           }
         }
       }
@@ -240,7 +327,10 @@ export default function SettingsPage() {
       const res = await fetch('/api/admin/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(systemForm),
+        body: JSON.stringify({
+          ...systemForm,
+          printConfig: printForm,
+        }),
       });
 
       const body = await res.json();
@@ -515,6 +605,206 @@ export default function SettingsPage() {
                         leftIcon={<RefreshCw size={14} />}
                         helperText="Time frame to void a transaction"
                       />
+                    </div>
+                  </div>
+
+                  {/* Ticket Printing Layout Configuration & Live Preview */}
+                  <div className="border-t border-gray-850/60 pt-5 space-y-5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5 select-none">
+                        <Printer size={13} className="text-accent-400" />
+                        <span>Ticket Print Layout & Thermal Paper Settings</span>
+                      </h3>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleApplyPreset('thermal_80mm')}
+                          className={`text-xs h-7 px-2.5 ${printForm.paperType === 'thermal_80mm' ? 'bg-accent-500/20 text-accent-300 border border-accent-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                        >
+                          Thermal 80mm
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleApplyPreset('thermal_58mm')}
+                          className={`text-xs h-7 px-2.5 ${printForm.paperType === 'thermal_58mm' ? 'bg-accent-500/20 text-accent-300 border border-accent-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                        >
+                          Thermal 58mm
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleApplyPreset('a4')}
+                          className={`text-xs h-7 px-2.5 ${printForm.paperType === 'a4' ? 'bg-accent-500/20 text-accent-300 border border-accent-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                        >
+                          A4 Standard
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleApplyPreset('custom')}
+                          className={`text-xs h-7 px-2.5 ${printForm.paperType === 'custom' ? 'bg-accent-500/20 text-accent-300 border border-accent-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                        >
+                          Custom
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      {/* Left: Printing Parameter Inputs */}
+                      <div className="lg:col-span-7 space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <Input
+                            label="Paper Width"
+                            type="number"
+                            value={printForm.paperWidth}
+                            onChange={(e) => setPrintForm((p) => ({ ...p, paperWidth: Math.max(20, parseInt(e.target.value) || 0) }))}
+                            helperText="Width (e.g. 80mm)"
+                          />
+                          <Input
+                            label="Paper Height"
+                            type="number"
+                            value={printForm.paperHeight}
+                            onChange={(e) => setPrintForm((p) => ({ ...p, paperHeight: Math.max(0, parseInt(e.target.value) || 0) }))}
+                            helperText="0 = Continuous roll"
+                          />
+                          <div className="space-y-1.5">
+                            <label className="block text-xs font-semibold text-gray-300">Dimension Unit</label>
+                            <Select
+                              value={printForm.unit}
+                              onChange={(e) => setPrintForm((p) => ({ ...p, unit: e.target.value as any }))}
+                              options={[
+                                { label: 'Millimeters (mm)', value: 'mm' },
+                                { label: 'Pixels (px)', value: 'px' },
+                                { label: 'Centimeters (cm)', value: 'cm' },
+                              ]}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Margins */}
+                        <div className="p-3 bg-gray-950/60 rounded-lg border border-gray-800 space-y-3">
+                          <span className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">Page Margins ({printForm.unit})</span>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <Input
+                              label="Top"
+                              type="number"
+                              value={printForm.marginTop}
+                              onChange={(e) => setPrintForm((p) => ({ ...p, marginTop: Math.max(0, parseInt(e.target.value) || 0) }))}
+                            />
+                            <Input
+                              label="Right"
+                              type="number"
+                              value={printForm.marginRight}
+                              onChange={(e) => setPrintForm((p) => ({ ...p, marginRight: Math.max(0, parseInt(e.target.value) || 0) }))}
+                            />
+                            <Input
+                              label="Bottom"
+                              type="number"
+                              value={printForm.marginBottom}
+                              onChange={(e) => setPrintForm((p) => ({ ...p, marginBottom: Math.max(0, parseInt(e.target.value) || 0) }))}
+                            />
+                            <Input
+                              label="Left"
+                              type="number"
+                              value={printForm.marginLeft}
+                              onChange={(e) => setPrintForm((p) => ({ ...p, marginLeft: Math.max(0, parseInt(e.target.value) || 0) }))}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Layout & QR Styling */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <Input
+                            label="QR Code Size"
+                            type="number"
+                            value={printForm.qrSize}
+                            onChange={(e) => setPrintForm((p) => ({ ...p, qrSize: Math.max(20, parseInt(e.target.value) || 0) }))}
+                            helperText="QR image width/height"
+                          />
+                          <Input
+                            label="Ticket Padding"
+                            type="number"
+                            value={printForm.ticketPadding}
+                            onChange={(e) => setPrintForm((p) => ({ ...p, ticketPadding: Math.max(0, parseInt(e.target.value) || 0) }))}
+                            helperText="Inner margin"
+                          />
+                          <div className="space-y-1.5">
+                            <label className="block text-xs font-semibold text-gray-300">Font Scale ({printForm.fontScale}x)</label>
+                            <input
+                              type="range"
+                              min="0.75"
+                              max="1.5"
+                              step="0.05"
+                              value={printForm.fontScale}
+                              onChange={(e) => setPrintForm((p) => ({ ...p, fontScale: parseFloat(e.target.value) }))}
+                              className="w-full h-8 accent-accent-500 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Toggles */}
+                        <div className="flex flex-wrap gap-4 pt-1">
+                          <label className="flex items-center gap-2 text-xs font-semibold text-gray-300 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={printForm.showLogo}
+                              onChange={(e) => setPrintForm((p) => ({ ...p, showLogo: e.target.checked }))}
+                              className="rounded border-gray-700 bg-gray-900 text-accent-500 focus:ring-accent-500 h-4 w-4"
+                            />
+                            <span>Show Header Logo</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-xs font-semibold text-gray-300 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={printForm.showFooter}
+                              onChange={(e) => setPrintForm((p) => ({ ...p, showFooter: e.target.checked }))}
+                              className="rounded border-gray-700 bg-gray-900 text-accent-500 focus:ring-accent-500 h-4 w-4"
+                            />
+                            <span>Show Footer Note</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-xs font-semibold text-gray-300 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={printForm.compactMode}
+                              onChange={(e) => setPrintForm((p) => ({ ...p, compactMode: e.target.checked }))}
+                              className="rounded border-gray-700 bg-gray-900 text-accent-500 focus:ring-accent-500 h-4 w-4"
+                            />
+                            <span>Compact Thermal Layout</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Right: Live Ticket Print Preview */}
+                      <div className="lg:col-span-5 flex flex-col items-center">
+                        <div className="w-full flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                            <Eye size={14} className="text-accent-400" />
+                            <span>Live Print Preview</span>
+                          </span>
+                          <span className="text-[10px] font-mono text-gray-500">
+                            {printForm.paperWidth}{printForm.unit} × {printForm.paperHeight > 0 ? `${printForm.paperHeight}${printForm.unit}` : 'AUTO ROLL'}
+                          </span>
+                        </div>
+
+                        <div className="w-full p-4 bg-gray-950/80 rounded-xl border border-gray-800 flex items-center justify-center min-h-[340px] overflow-hidden">
+                          <QRDisplay
+                            ticketNumber="EXH-9981-LIVE-PREVIEW"
+                            qrPayload="EXORA-LIVE-TICKET-PRINT-PREVIEW-TOKEN"
+                            ticketType="general"
+                            price={50000}
+                            exhibitionName="LIVE PRINT PREVIEW"
+                            quantity={4}
+                            remainingCount={4}
+                            printConfig={printForm}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 

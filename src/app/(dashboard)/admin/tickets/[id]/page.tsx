@@ -28,6 +28,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/providers/toast-provider';
+import { QRDisplay } from '@/components/shared/qr-display';
 import type { Ticket as TicketType } from '@/types/ticket.types';
 import type { BadgeVariant } from '@/types/ui.types';
 
@@ -391,6 +392,21 @@ export default function AdminTicketDetailPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Dedicated Print Only Container */}
+      <div className="hidden print:block printable-area">
+        <QRDisplay
+          ticketNumber={ticket.ticketNumber}
+          qrPayload={ticket.qrPayload}
+          qrDataUrl={qrDataUrl || undefined}
+          ticketType={ticket.ticketType}
+          price={ticket.price}
+          quantity={ticket.quantity || 1}
+          usedCount={ticket.usedCount || 0}
+          remainingCount={ticket.remainingCount ?? (ticket.quantity || 1)}
+          exhibitionName={exhibition?.name || 'Exhibition'}
+        />
+      </div>
     </>
   );
 }

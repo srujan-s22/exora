@@ -548,9 +548,9 @@ export default function CounterRidesPOSPage() {
             </div>
 
             {/* Printer layout */}
-            <div className="hidden print:block space-y-6">
+            <div className="hidden print:block printable-area">
               {createdTickets.map((ticket, idx) => (
-                <div key={ticket.id} className="page-break-after-always">
+                <div key={ticket.id} className={`printable-ticket-card ${idx < createdTickets.length - 1 ? 'page-break-after-always' : ''}`}>
                   <QRDisplay
                     ticketNumber={ticket.ticketNumber}
                     qrPayload={ticket.qrPayload || ''}

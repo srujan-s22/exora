@@ -10,6 +10,25 @@ import { z } from 'zod';
 import { AuditService } from '@/lib/services/audit.service';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
 
+const printConfigSchema = z.object({
+  paperType: z.enum(['thermal_80mm', 'thermal_58mm', 'a4', 'custom']).optional(),
+  layoutMode: z.enum(['thermal', 'a4', 'custom']).optional(),
+  paperWidth: z.number().min(20).max(500).optional(),
+  paperHeight: z.number().min(0).max(1000).optional(),
+  unit: z.enum(['mm', 'px', 'cm']).optional(),
+  orientation: z.enum(['portrait', 'landscape']).optional(),
+  marginTop: z.number().min(0).max(100).optional(),
+  marginRight: z.number().min(0).max(100).optional(),
+  marginBottom: z.number().min(0).max(100).optional(),
+  marginLeft: z.number().min(0).max(100).optional(),
+  ticketPadding: z.number().min(0).max(50).optional(),
+  qrSize: z.number().min(20).max(300).optional(),
+  fontScale: z.number().min(0.5).max(2.0).optional(),
+  showLogo: z.boolean().optional(),
+  showFooter: z.boolean().optional(),
+  compactMode: z.boolean().optional(),
+});
+
 const updateSettingsSchema = z.object({
   siteTitle: z.string().min(1, 'Site title cannot be empty').max(100).trim().optional(),
   supportEmail: z.string().email('Invalid email').trim().optional(),
@@ -17,6 +36,7 @@ const updateSettingsSchema = z.object({
   ticketPrefix: z.string().min(1, 'Prefix cannot be empty').max(10).trim().uppercase().optional(),
   maxScansPerTicket: z.number().min(1, 'Max scans must be at least 1').max(100).optional(),
   cancellationWindowSeconds: z.number().min(5, 'Window must be at least 5 seconds').max(3600).optional(),
+  printConfig: printConfigSchema.optional(),
 });
 
 /**
@@ -109,8 +129,15 @@ export async function PATCH(req: NextRequest) {
     const changes: Record<string, { from: any; to: any }> = {};
 
     Object.entries(updates).forEach(([key, value]) => {
-      const currentVal = (settings as any)[key];
-      if (value !== undefined && value !== currentVal) {
+      if (key === 'printConfig' && value) {
+        const currentPrint = settings.printConfig?.toObject
+          ? settings.printConfig.toObject()
+          : settings.printConfig || {};
+        const newPrintConfig = { ...currentPrint, ...(value as Record<string, any>) };
+        settings.printConfig = newPrintConfig as any;
+        changes['printConfig'] = { from: currentPrint, to: newPrintConfig };
+      } else if (value !== undefined && (settings as any)[key] !== value) {
+        const currentVal = (settings as any)[key];
         changes[key] = { from: currentVal, to: value };
         (settings as any)[key] = value;
       }
