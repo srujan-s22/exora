@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { ToastProvider } from '@/components/providers/toast-provider';
 import { AuthProvider } from '@/components/providers/auth-provider';
@@ -39,6 +40,7 @@ export default function RootLayout({
           <AuthProvider>
             <ToastProvider>
               {children}
+              <SpeedInsights />
             </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
