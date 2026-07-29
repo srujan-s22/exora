@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Shield, Mail, Calendar, Clock, User, Building2,
   Wifi, UserX, UserCheck, Key, Pencil, Save, X, AlertTriangle,
-  Activity, Globe, Crown, Lock, Phone
+  Activity, Globe, Crown, Lock, Phone, ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -331,6 +331,16 @@ export default function StaffDetailPage() {
                     <Button variant="secondary" size="sm" onClick={handleStartEdit} leftIcon={<Pencil size={14} />}>
                       Edit
                     </Button>
+                    {((isSuperAdmin && staff.role === 'admin') || ((isSuperAdmin || hasPermission('canManageStaff')) && staff.role === 'counter')) && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => router.push(`/admin/staff/${staff.id}/permissions`)}
+                        leftIcon={<ShieldAlert size={14} />}
+                      >
+                        Permissions
+                      </Button>
+                    )}
                     <Button
                       variant={staff.isActive ? 'danger' : 'primary'}
                       size="sm"

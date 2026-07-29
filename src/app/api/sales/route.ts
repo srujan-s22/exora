@@ -10,6 +10,7 @@ import { successResponse, createdResponse, errorResponse } from '@/lib/utils/api
 import { createTicketSchema } from '@/lib/validators/ticket.schema';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
+import { hasCounterPermission } from '@/lib/utils/permission-helpers';
 
 /**
  * GET /api/sales
@@ -27,8 +28,12 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
     }
 
-    if (user.role !== 'admin' && user.role !== 'counter') {
+    if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'counter') {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
+    }
+
+    if (!hasCounterPermission(user, 'canViewEntrySales')) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to view entry sales', 403);
     }
 
     const { searchParams } = new URL(req.url);
@@ -72,8 +77,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Only admin and counter roles can create sales
-    if (user.role !== 'admin' && user.role !== 'counter') {
+    if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'counter') {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
+    }
+
+    if (!hasCounterPermission(user, 'canSellEntryTickets')) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to sell entry tickets', 403);
     }
 
     const body = await req.json();

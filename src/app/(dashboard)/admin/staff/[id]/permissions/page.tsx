@@ -4,13 +4,16 @@ import * as React from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ChevronLeft, Shield, ShieldCheck, Save, Users, KeyRound,
-  ScrollText, UserPlus, CheckCircle, Lock, Plus,
+  ScrollText, UserPlus, CheckCircle, Lock, Plus, Ticket, Gamepad2,
+  Printer, History, AlertCircle, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
+import { COUNTER_PERMISSION_PRESETS } from '@/lib/config/counter-permission-presets';
 
 interface PermissionItem {
   key: string;
@@ -19,7 +22,7 @@ interface PermissionItem {
   icon: React.ReactNode;
 }
 
-const PERMISSION_ITEMS: PermissionItem[] = [
+const ADMIN_PERMISSION_ITEMS: PermissionItem[] = [
   {
     key: 'canCreateUsers',
     label: 'Create Users',
@@ -64,12 +67,68 @@ const PERMISSION_ITEMS: PermissionItem[] = [
   },
 ];
 
+const COUNTER_ENTRY_ITEMS: PermissionItem[] = [
+  {
+    key: 'canSellEntryTickets',
+    label: 'Sell Entry Tickets',
+    description: 'Allows issuing main entry tickets at the counter terminal.',
+    icon: <Ticket size={16} />,
+  },
+  {
+    key: 'canViewEntrySales',
+    label: 'View Entry Sales History',
+    description: 'Allows viewing past entry ticket sale transaction logs.',
+    icon: <History size={16} />,
+  },
+  {
+    key: 'canReprintEntryTickets',
+    label: 'Reprint Entry Tickets',
+    description: 'Allows reprinting duplicate entry tickets from history.',
+    icon: <Printer size={16} />,
+  },
+  {
+    key: 'canCancelEntryTickets',
+    label: 'Cancel Entry Transactions',
+    description: 'Allows voiding/cancelling entry ticket transactions within window.',
+    icon: <AlertCircle size={16} />,
+  },
+];
+
+const COUNTER_RIDE_ITEMS: PermissionItem[] = [
+  {
+    key: 'canSellRideTickets',
+    label: 'Sell Ride Tickets',
+    description: 'Allows issuing ride tickets at the counter terminal.',
+    icon: <Gamepad2 size={16} />,
+  },
+  {
+    key: 'canViewRideSales',
+    label: 'View Ride Sales History',
+    description: 'Allows viewing past ride ticket sale transaction logs.',
+    icon: <History size={16} />,
+  },
+  {
+    key: 'canReprintRideTickets',
+    label: 'Reprint Ride Tickets',
+    description: 'Allows reprinting duplicate ride tickets from history.',
+    icon: <Printer size={16} />,
+  },
+  {
+    key: 'canCancelRideTickets',
+    label: 'Cancel Ride Transactions',
+    description: 'Allows voiding/cancelling ride ticket transactions within window.',
+    icon: <AlertCircle size={16} />,
+  },
+];
+
 export default function PermissionsPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
   const { addToast } = useToast();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, hasPermission } = useAuth();
+
+  const canManage = isSuperAdmin || hasPermission('canManageStaff');
 
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -80,17 +139,31 @@ export default function PermissionsPage() {
     permissions: Record<string, boolean>;
   } | null>(null);
   const [permissions, setPermissions] = React.useState<Record<string, boolean>>({});
+  const [selectedPresetId, setSelectedPresetId] = React.useState<string>('custom');
   const [hasChanges, setHasChanges] = React.useState(false);
 
   React.useEffect(() => {
     async function loadPermissions() {
       try {
         const res = await fetch(`/api/staff/${id}/permissions`);
-        if (!res.ok) throw new Error('Failed to load');
+        if (!res.ok) throw new Error('Failed to load permissions');
         const body = await res.json();
         if (body.success) {
           setStaffInfo(body.data);
           setPermissions(body.data.permissions || {});
+          
+          // Detect matching preset for counter staff
+          if (body.data.role === 'counter') {
+            const perms = body.data.permissions || {};
+            const isEntryOnly = perms.canSellEntryTickets && perms.canViewEntrySales && perms.canReprintEntryTickets && perms.canCancelEntryTickets && !perms.canSellRideTickets && !perms.canViewRideSales;
+            const isRideOnly = perms.canSellRideTickets && perms.canViewRideSales && perms.canReprintRideTickets && perms.canCancelRideTickets && !perms.canSellEntryTickets && !perms.canViewEntrySales;
+            const isFull = perms.canSellEntryTickets && perms.canSellRideTickets && perms.canViewEntrySales && perms.canViewRideSales;
+            
+            if (isEntryOnly) setSelectedPresetId('entry_counter');
+            else if (isRideOnly) setSelectedPresetId('ride_counter');
+            else if (isFull) setSelectedPresetId('full_counter');
+            else setSelectedPresetId('custom');
+          }
         }
       } catch (err: any) {
         addToast({ type: 'error', title: 'Error', message: err.message });
@@ -104,9 +177,29 @@ export default function PermissionsPage() {
   const togglePermission = (key: string) => {
     setPermissions((prev) => {
       const updated = { ...prev, [key]: !prev[key] };
+      setSelectedPresetId('custom');
       setHasChanges(true);
       return updated;
     });
+  };
+
+  const handleApplyPreset = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    if (presetId === 'custom') return;
+
+    const preset = COUNTER_PERMISSION_PRESETS.find((p) => p.id === presetId);
+    if (preset && preset.permissions) {
+      setPermissions((prev) => ({
+        ...prev,
+        ...preset.permissions,
+      }));
+      setHasChanges(true);
+      addToast({
+        type: 'info',
+        title: 'Preset Selected',
+        message: `Applied "${preset.label}" template permissions. Save changes to finalize.`,
+      });
+    }
   };
 
   const handleSave = async () => {
@@ -121,21 +214,25 @@ export default function PermissionsPage() {
       if (!res.ok || !body.success) throw new Error(body.error?.message || 'Failed to save');
 
       setHasChanges(false);
-      addToast({ type: 'success', title: 'Permissions saved', message: `Permissions updated for ${staffInfo?.name || 'staff member'}.` });
+      addToast({
+        type: 'success',
+        title: 'Permissions Saved',
+        message: `Permissions updated for ${staffInfo?.name || 'staff member'}.`,
+      });
     } catch (err: any) {
-      addToast({ type: 'error', title: 'Save failed', message: err.message });
+      addToast({ type: 'error', title: 'Save Failed', message: err.message });
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (!isSuperAdmin) {
+  if (!canManage) {
     return (
       <div className="flex flex-1 items-center justify-center py-24 text-center">
         <div>
           <Lock size={40} className="text-gray-600 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-gray-200">Access Restricted</h2>
-          <p className="text-sm text-gray-400 mt-1">Only super admins can manage user permissions.</p>
+          <p className="text-sm text-gray-400 mt-1">You do not have permission to manage staff permissions.</p>
         </div>
       </div>
     );
@@ -153,7 +250,7 @@ export default function PermissionsPage() {
     return (
       <div className="flex flex-1 items-center justify-center py-24 text-center">
         <div>
-          <h2 className="text-lg font-bold text-gray-200">Staff Not Found</h2>
+          <h2 className="text-lg font-bold text-gray-200">Staff Member Not Found</h2>
           <Button variant="secondary" className="mt-4" onClick={() => router.back()}>
             Go Back
           </Button>
@@ -163,6 +260,8 @@ export default function PermissionsPage() {
   }
 
   const isAdmin = staffInfo.role === 'admin';
+  const isCounter = staffInfo.role === 'counter';
+  const isConfigurable = isAdmin || isCounter;
 
   return (
     <div className="space-y-6 flex flex-col flex-1 max-w-3xl">
@@ -193,23 +292,46 @@ export default function PermissionsPage() {
         </div>
       </div>
 
-      {/* Permission description */}
-      {!isAdmin && (
+      {/* Unconfigurable Notice */}
+      {!isConfigurable && (
         <div className="rounded-lg bg-warning/5 border border-warning/20 p-4">
           <p className="text-sm text-gray-300">
-            Permissions can only be managed for <strong>admin</strong> users. {staffInfo.role === 'super_admin' ? 'Super admins have all permissions by default.' : `${staffInfo.role} users have fixed permissions based on their role.`}
+            Permissions can only be configured for <strong>admin</strong> and <strong>counter</strong> staff members.{' '}
+            {staffInfo.role === 'super_admin' ? 'Super admins have all permissions by default.' : `${staffInfo.role.toUpperCase()} role has fixed operational permissions.`}
           </p>
         </div>
       )}
 
-      {/* Permission toggles */}
+      {/* Counter Permission Presets (Refinement 1) */}
+      {isCounter && (
+        <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} className="text-accent-400" />
+            <h2 className="text-sm font-bold text-gray-200">Permission Presets</h2>
+          </div>
+          <p className="text-xs text-gray-400">
+            Select a preset template to auto-populate counter permissions, or customize individual toggles below.
+          </p>
+          <Select
+            label="Template Preset"
+            value={selectedPresetId}
+            onChange={(e) => handleApplyPreset(e.target.value)}
+            options={COUNTER_PERMISSION_PRESETS.map((p) => ({
+              label: `${p.label} - ${p.description}`,
+              value: p.id,
+            }))}
+          />
+        </div>
+      )}
+
+      {/* Admin Permissions List */}
       {isAdmin && (
         <div className="space-y-3">
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider select-none">
-            Permission Controls
+            Admin System Permissions
           </h2>
           <div className="rounded-xl border border-gray-800 bg-gray-900/40 divide-y divide-gray-800/50">
-            {PERMISSION_ITEMS.map((item) => {
+            {ADMIN_PERMISSION_ITEMS.map((item) => {
               const isEnabled = !!permissions[item.key];
               const isReserved = item.key === 'canApproveResets';
               return (
@@ -255,8 +377,109 @@ export default function PermissionsPage() {
         </div>
       )}
 
+      {/* Counter Permissions List */}
+      {isCounter && (
+        <div className="space-y-6">
+          {/* Entry Operations Group */}
+          <div className="space-y-3">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider select-none flex items-center gap-2">
+              <Ticket size={14} className="text-accent-400" />
+              <span>Main Entry Operations</span>
+            </h2>
+            <div className="rounded-xl border border-gray-800 bg-gray-900/40 divide-y divide-gray-800/50">
+              {COUNTER_ENTRY_ITEMS.map((item) => {
+                const isEnabled = !!permissions[item.key];
+                return (
+                  <div
+                    key={item.key}
+                    className="flex items-center justify-between p-4 hover:bg-gray-850/50 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        isEnabled
+                          ? 'bg-accent-500/10 text-accent-300 border border-accent-600/30'
+                          : 'bg-gray-800 text-gray-500 border border-gray-700/50'
+                      }`}>
+                        {item.icon}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-200">{item.label}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => togglePermission(item.key)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 ${
+                        isEnabled ? 'bg-accent-500' : 'bg-gray-700'
+                      }`}
+                      role="switch"
+                      aria-checked={isEnabled}
+                      aria-label={`Toggle ${item.label}`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transform ring-0 transition duration-200 ease-in-out ${
+                          isEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Ride Operations Group */}
+          <div className="space-y-3">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider select-none flex items-center gap-2">
+              <Gamepad2 size={14} className="text-accent-400" />
+              <span>Ride Ticket Operations</span>
+            </h2>
+            <div className="rounded-xl border border-gray-800 bg-gray-900/40 divide-y divide-gray-800/50">
+              {COUNTER_RIDE_ITEMS.map((item) => {
+                const isEnabled = !!permissions[item.key];
+                return (
+                  <div
+                    key={item.key}
+                    className="flex items-center justify-between p-4 hover:bg-gray-850/50 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        isEnabled
+                          ? 'bg-accent-500/10 text-accent-300 border border-accent-600/30'
+                          : 'bg-gray-800 text-gray-500 border border-gray-700/50'
+                      }`}>
+                        {item.icon}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-200">{item.label}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => togglePermission(item.key)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 ${
+                        isEnabled ? 'bg-accent-500' : 'bg-gray-700'
+                      }`}
+                      role="switch"
+                      aria-checked={isEnabled}
+                      aria-label={`Toggle ${item.label}`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transform ring-0 transition duration-200 ease-in-out ${
+                          isEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Save button */}
-      {isAdmin && hasChanges && (
+      {isConfigurable && hasChanges && (
         <div className="sticky bottom-6 flex justify-end">
           <Button
             isLoading={isSaving}

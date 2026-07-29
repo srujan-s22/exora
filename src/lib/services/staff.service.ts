@@ -2,7 +2,7 @@ import { User as UserModel } from '@/lib/db/models/user.model';
 import { connectToDatabase } from '@/lib/db/connection';
 import { hashPassword } from '@/lib/utils/crypto';
 import { STAFF_ID_PREFIXES } from '@/lib/utils/constants';
-import { CREATABLE_ROLES, DEFAULT_ADMIN_PERMISSIONS, SUPER_ADMIN_PERMISSIONS } from '@/lib/config/roles';
+import { CREATABLE_ROLES, DEFAULT_ADMIN_PERMISSIONS, SUPER_ADMIN_PERMISSIONS, DEFAULT_COUNTER_PERMISSIONS } from '@/lib/config/roles';
 import type { Staff, CreateStaffInput, UpdateStaffInput } from '@/types/staff.types';
 import type { PaginationParams, PaginationMeta } from '@/types/api.types';
 import type { AuthUser } from '@/types/auth.types';
@@ -100,6 +100,11 @@ export const StaffService = {
         ...DEFAULT_ADMIN_PERMISSIONS,
         ...(data.permissions || {}),
       };
+    } else if (data.role === 'counter') {
+      permissions = {
+        ...DEFAULT_COUNTER_PERMISSIONS,
+        ...(data.permissions || {}),
+      };
     } else {
       permissions = { ...DEFAULT_ADMIN_PERMISSIONS };
     }
@@ -189,7 +194,7 @@ export const StaffService = {
   },
 
   /**
-   * Update an admin's permissions. Super admin only.
+   * Update an admin or counter user's permissions.
    */
   async updatePermissions(
     id: string,
@@ -199,14 +204,16 @@ export const StaffService = {
 
     const user = await UserModel.findById(id);
     if (!user) return null;
-    if (user.role !== 'admin') {
-      throw new Error('Permissions can only be set on admin users.');
+    if (user.role !== 'admin' && user.role !== 'counter') {
+      throw new Error('Permissions can only be set on admin and counter users.');
     }
+
+    const defaultPerms = user.role === 'counter' ? DEFAULT_COUNTER_PERMISSIONS : DEFAULT_ADMIN_PERMISSIONS;
 
     // Merge with existing permissions
     const currentPerms = (user.permissions as any)?.toObject?.() || user.permissions || {};
     const updatedPerms = {
-      ...DEFAULT_ADMIN_PERMISSIONS,
+      ...defaultPerms,
       ...currentPerms,
       ...permissions,
     };

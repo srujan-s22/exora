@@ -15,7 +15,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 /**
  * PATCH /api/staff/:id/permissions
- * Update an admin's permissions. Super admin only.
+ * Update an admin or counter user's permissions. Super admin or Admin (with canManageStaff).
  */
 export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
@@ -28,9 +28,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
     const currentUser = await AuthService.verifyToken(token);
 
-    // Only super admins can manage permissions
-    if (!currentUser || currentUser.role !== 'super_admin') {
-      return errorResponse('FORBIDDEN', 'Only super admins can manage user permissions', 403);
+    if (!currentUser || (currentUser.role !== 'super_admin' && (currentUser.role !== 'admin' || !currentUser.permissions?.canManageStaff))) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to manage user permissions', 403);
     }
 
     const { id } = await context.params;
@@ -56,8 +55,15 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (!currentStaff) {
       return errorResponse('NOT_FOUND', 'Staff member not found', 404);
     }
-    if (currentStaff.role !== 'admin') {
-      return errorResponse('INVALID_ROLE', 'Permissions can only be set on admin users. Super admins have all permissions by default.', 400);
+    if (currentStaff.role !== 'admin' && currentStaff.role !== 'counter') {
+      return errorResponse('INVALID_ROLE', 'Permissions can only be configured for admin and counter users.', 400);
+    }
+
+    // Role-specific authorization check:
+    // Only super admins can manage permissions for Admin users.
+    // Admins with canManageStaff (or super_admin) can manage permissions for Counter users.
+    if (currentStaff.role === 'admin' && currentUser.role !== 'super_admin') {
+      return errorResponse('FORBIDDEN', 'Only super admins can manage admin user permissions', 403);
     }
 
     const previousPermissions = { ...currentStaff.permissions };
@@ -68,7 +74,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return errorResponse('NOT_FOUND', 'Staff member not found', 404);
     }
 
-    // Audit log
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+    const ipAddress = req.headers.get('x-forwarded-for') || 'unknown';
+
+    // Audit log (Refinement 3: Permission change audit logging)
     await AuditService.create({
       action: 'user.permissions_changed',
       performedBy: currentUser.id as any,
@@ -78,10 +87,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       details: {
         staffId: updated.staffId,
         name: updated.name,
+        targetUsername: updated.name,
+        targetRole: updated.role,
+        adminId: currentUser.id,
+        adminUsername: currentUser.name,
         previousPermissions,
+        updatedPermissions: updated.permissions,
         newPermissions: updated.permissions,
         changedFields: parsed.data,
       },
+      ipAddress,
+      userAgent,
     });
 
     return successResponse({
@@ -96,7 +112,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
 /**
  * GET /api/staff/:id/permissions
- * Get an admin's current permissions. Super admin only.
+ * Get an admin or counter user's current permissions.
  */
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
@@ -108,8 +124,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
       return errorResponse('UNAUTHORIZED', 'Session token is missing', 401);
     }
     const currentUser = await AuthService.verifyToken(token);
-    if (!currentUser || currentUser.role !== 'super_admin') {
-      return errorResponse('FORBIDDEN', 'Only super admins can view user permissions', 403);
+    if (!currentUser || (currentUser.role !== 'super_admin' && (currentUser.role !== 'admin' || !currentUser.permissions?.canManageStaff))) {
+      return errorResponse('FORBIDDEN', 'Access denied', 403);
     }
 
     const { id } = await context.params;
@@ -121,6 +137,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const staff = await StaffService.findById(id);
     if (!staff) {
       return errorResponse('NOT_FOUND', 'Staff member not found', 404);
+    }
+
+    if (staff.role === 'admin' && currentUser.role !== 'super_admin') {
+      return errorResponse('FORBIDDEN', 'Only super admins can view admin user permissions', 403);
     }
 
     return successResponse({

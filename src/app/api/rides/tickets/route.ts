@@ -6,6 +6,7 @@ import { AuthService } from '@/lib/services/auth.service';
 import { successResponse, createdResponse, errorResponse } from '@/lib/utils/api-response';
 import { createRideTicketSchema } from '@/lib/validators/ride.schema';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
+import { hasCounterPermission } from '@/lib/utils/permission-helpers';
 
 /**
  * POST /api/rides/tickets
@@ -21,6 +22,10 @@ export async function POST(req: NextRequest) {
     const user = await AuthService.verifyToken(token);
     if (!user || (user.role !== 'counter' && user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('FORBIDDEN', 'Access Denied: Ticket sales restricted to counters and admins.', 403);
+    }
+
+    if (!hasCounterPermission(user, 'canSellRideTickets')) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to sell ride tickets', 403);
     }
 
     const body = await req.json();

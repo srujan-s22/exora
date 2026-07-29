@@ -109,8 +109,8 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
     {
       title: 'Operations',
       items: [
-        { label: 'Sell Tickets', href: '/counter/sell', icon: 'Ticket' },
-        { label: 'Sell Ride Tickets', href: '/counter/rides', icon: 'Gamepad2' },
+        { label: 'Sell Tickets', href: '/counter/sell', icon: 'Ticket', requirePermission: 'canSellEntryTickets' },
+        { label: 'Sell Ride Tickets', href: '/counter/rides', icon: 'Gamepad2', requirePermission: 'canSellRideTickets' },
         { label: 'Sales History', href: '/counter/history', icon: 'History' },
       ],
     },

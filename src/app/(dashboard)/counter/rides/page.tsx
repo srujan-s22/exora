@@ -19,7 +19,7 @@ import type { Ride } from '@/types/ride.types';
 
 export default function CounterRidesPOSPage() {
   const { addToast } = useToast();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, hasPermission } = useAuth();
   const router = useRouter();
 
   // Page States
@@ -48,12 +48,16 @@ export default function CounterRidesPOSPage() {
   const [currentTicketIndex, setCurrentTicketIndex] = React.useState(0);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  // Role gate check
+  // Role gate & permission check
   React.useEffect(() => {
-    if (!authLoading && user && user.role !== 'counter' && user.role !== 'admin') {
-      router.push('/unauthorized');
+    if (!authLoading && user) {
+      if (user.role !== 'counter' && user.role !== 'admin' && user.role !== 'super_admin') {
+        router.push('/unauthorized');
+      } else if (!hasPermission('canSellRideTickets')) {
+        router.push('/counter');
+      }
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, hasPermission]);
 
   // Fetch exhibitions
   const loadExhibitions = React.useCallback(async () => {

@@ -10,6 +10,7 @@ import { connectToDatabase } from '@/lib/db/connection';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
+import { hasCounterPermission } from '@/lib/utils/permission-helpers';
 
 /**
  * POST /api/rides/sales/[id]/cancel
@@ -34,6 +35,10 @@ export async function POST(
 
     if (user.role !== 'counter' && user.role !== 'admin' && user.role !== 'super_admin') {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
+    }
+
+    if (!hasCounterPermission(user, 'canCancelRideTickets')) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to cancel ride ticket sales', 403);
     }
 
     const { id } = await params;

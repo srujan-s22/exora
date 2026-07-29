@@ -20,7 +20,7 @@ import { Spinner } from '@/components/ui/spinner';
 
 export default function CounterDashboardPage() {
   const { addToast } = useToast();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, hasPermission } = useAuth();
   const router = useRouter();
 
   // Page States
@@ -350,6 +350,28 @@ export default function CounterDashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {!hasPermission('canSellEntryTickets') ? (
+                <div className="py-6 text-center space-y-4">
+                  <div className="flex justify-center text-warning">
+                    <AlertCircle size={36} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-200">Entry Sales Restricted</h3>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Your staff account does not have permission to issue main entry tickets.
+                    </p>
+                  </div>
+                  {hasPermission('canSellRideTickets') && (
+                    <Button
+                      variant="secondary"
+                      className="w-full text-xs"
+                      onClick={() => router.push('/counter/rides')}
+                    >
+                      Go to Ride Ticket Sales
+                    </Button>
+                  )}
+                </div>
+              ) : (
               <form onSubmit={handleSaleSubmit} className="space-y-5">
                 
                 {/* Select Exhibition */}
@@ -500,6 +522,7 @@ export default function CounterDashboardPage() {
                 </Button>
 
               </form>
+              )}
             </CardContent>
           </Card>
         </div>

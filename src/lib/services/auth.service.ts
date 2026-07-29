@@ -2,7 +2,7 @@ import { User as UserModel } from '@/lib/db/models/user.model';
 import { connectToDatabase } from '@/lib/db/connection';
 import { comparePassword, signJwt } from '@/lib/utils/crypto';
 import { AuditService } from '@/lib/services/audit.service';
-import { SUPER_ADMIN_PERMISSIONS, DEFAULT_ADMIN_PERMISSIONS } from '@/lib/config/roles';
+import { SUPER_ADMIN_PERMISSIONS, DEFAULT_ADMIN_PERMISSIONS, DEFAULT_COUNTER_PERMISSIONS } from '@/lib/config/roles';
 import type { LoginCredentials, AuthUser } from '@/types/auth.types';
 import type { UserPermissionKey } from '@/lib/config/roles';
 import jwt from 'jsonwebtoken';
@@ -19,6 +19,12 @@ function resolvePermissions(role: string, storedPermissions?: Record<string, boo
     return {
       ...DEFAULT_ADMIN_PERMISSIONS,
       ...storedPermissions,
+    } as Record<UserPermissionKey, boolean>;
+  }
+  if (role === 'counter') {
+    return {
+      ...DEFAULT_COUNTER_PERMISSIONS,
+      ...(storedPermissions || {}),
     } as Record<UserPermissionKey, boolean>;
   }
   return { ...DEFAULT_ADMIN_PERMISSIONS };

@@ -17,7 +17,7 @@ import { Spinner } from '@/components/ui/spinner';
 
 export default function SellTicketsPage() {
   const { addToast } = useToast();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, hasPermission } = useAuth();
   const router = useRouter();
 
   // Page States
@@ -42,12 +42,16 @@ export default function SellTicketsPage() {
   const [currentTicketIndex, setCurrentTicketIndex] = React.useState(0);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  // Auth role gating
+  // Auth role gating & permission check
   React.useEffect(() => {
-    if (!authLoading && user && user.role !== 'counter' && user.role !== 'admin') {
-      router.push('/unauthorized');
+    if (!authLoading && user) {
+      if (user.role !== 'counter' && user.role !== 'admin' && user.role !== 'super_admin') {
+        router.push('/unauthorized');
+      } else if (!hasPermission('canSellEntryTickets')) {
+        router.push('/counter');
+      }
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, hasPermission]);
 
   // Load exhibitions
   const loadExhibitions = React.useCallback(async () => {

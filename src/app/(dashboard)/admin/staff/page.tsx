@@ -368,7 +368,7 @@ export default function StaffManagementPage() {
           >
             <Eye size={15} />
           </Link>
-          {isSuperAdmin && row.role === 'admin' && (
+          {((isSuperAdmin && row.role === 'admin') || ((isSuperAdmin || hasPermission('canManageStaff')) && row.role === 'counter')) && (
             <Link
               href={`/admin/staff/${row.id}/permissions`}
               className="inline-flex items-center justify-center h-8 w-8 rounded-md text-gray-400 hover:text-amber-400 hover:bg-gray-800 transition-colors"

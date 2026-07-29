@@ -24,6 +24,15 @@ export const createStaffSchema = z.object({
     canApproveResets: z.boolean().optional(),
     canCreateAdmins: z.boolean().optional(),
     canCreateExhibitions: z.boolean().optional(),
+    // Counter operation permissions
+    canSellEntryTickets: z.boolean().optional(),
+    canViewEntrySales: z.boolean().optional(),
+    canReprintEntryTickets: z.boolean().optional(),
+    canCancelEntryTickets: z.boolean().optional(),
+    canSellRideTickets: z.boolean().optional(),
+    canViewRideSales: z.boolean().optional(),
+    canReprintRideTickets: z.boolean().optional(),
+    canCancelRideTickets: z.boolean().optional(),
   }).optional(),
   assignedExhibitions: z.array(z.string()).optional(),
   superAdminSecret: z.string().optional(),
@@ -57,6 +66,15 @@ export const updatePermissionsSchema = z.object({
   canApproveResets: z.boolean().optional(),
   canCreateAdmins: z.boolean().optional(),
   canCreateExhibitions: z.boolean().optional(),
+  // Counter operation permissions
+  canSellEntryTickets: z.boolean().optional(),
+  canViewEntrySales: z.boolean().optional(),
+  canReprintEntryTickets: z.boolean().optional(),
+  canCancelEntryTickets: z.boolean().optional(),
+  canSellRideTickets: z.boolean().optional(),
+  canViewRideSales: z.boolean().optional(),
+  canReprintRideTickets: z.boolean().optional(),
+  canCancelRideTickets: z.boolean().optional(),
 });
 
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;

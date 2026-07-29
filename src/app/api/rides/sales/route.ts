@@ -5,6 +5,7 @@ import { RideService } from '@/lib/services/ride.service';
 import { AuthService } from '@/lib/services/auth.service';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
+import { hasCounterPermission } from '@/lib/utils/permission-helpers';
 
 /**
  * GET /api/rides/sales
@@ -24,6 +25,10 @@ export async function GET(req: NextRequest) {
 
     if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'counter') {
       return errorResponse('FORBIDDEN', 'Access denied', 403);
+    }
+
+    if (!hasCounterPermission(user, 'canViewRideSales')) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to view ride sales', 403);
     }
 
     const { searchParams } = new URL(req.url);

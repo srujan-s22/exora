@@ -9,6 +9,15 @@ export interface IUserPermissions {
   canApproveResets: boolean;
   canCreateAdmins: boolean;
   canCreateExhibitions: boolean;
+  // Counter operation permissions
+  canSellEntryTickets: boolean;
+  canViewEntrySales: boolean;
+  canReprintEntryTickets: boolean;
+  canCancelEntryTickets: boolean;
+  canSellRideTickets: boolean;
+  canViewRideSales: boolean;
+  canReprintRideTickets: boolean;
+  canCancelRideTickets: boolean;
 }
 
 export interface IUser extends Document {
@@ -38,6 +47,15 @@ const PermissionsSchema = new Schema(
     canApproveResets: { type: Boolean, default: false },
     canCreateAdmins: { type: Boolean, default: false },
     canCreateExhibitions: { type: Boolean, default: false },
+    // Counter operation permissions — default true for backward compatibility
+    canSellEntryTickets: { type: Boolean, default: true },
+    canViewEntrySales: { type: Boolean, default: true },
+    canReprintEntryTickets: { type: Boolean, default: true },
+    canCancelEntryTickets: { type: Boolean, default: true },
+    canSellRideTickets: { type: Boolean, default: true },
+    canViewRideSales: { type: Boolean, default: true },
+    canReprintRideTickets: { type: Boolean, default: true },
+    canCancelRideTickets: { type: Boolean, default: true },
   },
   { _id: false }
 );
@@ -88,6 +106,14 @@ const UserSchema = new Schema<IUser>(
         canApproveResets: false,
         canCreateAdmins: false,
         canCreateExhibitions: false,
+        canSellEntryTickets: true,
+        canViewEntrySales: true,
+        canReprintEntryTickets: true,
+        canCancelEntryTickets: true,
+        canSellRideTickets: true,
+        canViewRideSales: true,
+        canReprintRideTickets: true,
+        canCancelRideTickets: true,
       }),
     },
     assignedExhibitions: [{

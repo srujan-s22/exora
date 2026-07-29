@@ -45,11 +45,20 @@ export const USER_PERMISSION_KEYS = [
   'canApproveResets',
   'canCreateAdmins',
   'canCreateExhibitions',
+  // Counter operation permissions
+  'canSellEntryTickets',
+  'canViewEntrySales',
+  'canReprintEntryTickets',
+  'canCancelEntryTickets',
+  'canSellRideTickets',
+  'canViewRideSales',
+  'canReprintRideTickets',
+  'canCancelRideTickets',
 ] as const;
 
 export type UserPermissionKey = (typeof USER_PERMISSION_KEYS)[number];
 
-/** Default permissions for newly created admins (all off). */
+/** Default permissions for newly created admins (all off for admin perms, all true for counter ops). */
 export const DEFAULT_ADMIN_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canCreateUsers: false,
   canResetPasswords: false,
@@ -58,6 +67,15 @@ export const DEFAULT_ADMIN_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canApproveResets: false,
   canCreateAdmins: false,
   canCreateExhibitions: false,
+  // Admins inherently bypass counter permission checks via role, but set true for completeness
+  canSellEntryTickets: true,
+  canViewEntrySales: true,
+  canReprintEntryTickets: true,
+  canCancelEntryTickets: true,
+  canSellRideTickets: true,
+  canViewRideSales: true,
+  canReprintRideTickets: true,
+  canCancelRideTickets: true,
 };
 
 /** Super admins always have all permissions. */
@@ -69,6 +87,39 @@ export const SUPER_ADMIN_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canApproveResets: true,
   canCreateAdmins: true,
   canCreateExhibitions: true,
+  canSellEntryTickets: true,
+  canViewEntrySales: true,
+  canReprintEntryTickets: true,
+  canCancelEntryTickets: true,
+  canSellRideTickets: true,
+  canViewRideSales: true,
+  canReprintRideTickets: true,
+  canCancelRideTickets: true,
+};
+
+/**
+ * Default permissions for newly created counter staff (all counter ops enabled).
+ * Existing counter users in MongoDB will get these defaults via schema defaults,
+ * preserving backward compatibility.
+ */
+export const DEFAULT_COUNTER_PERMISSIONS: Record<UserPermissionKey, boolean> = {
+  // Admin permissions are irrelevant for counter staff
+  canCreateUsers: false,
+  canResetPasswords: false,
+  canViewAuditLogs: false,
+  canManageStaff: false,
+  canApproveResets: false,
+  canCreateAdmins: false,
+  canCreateExhibitions: false,
+  // Counter operation permissions — all enabled by default
+  canSellEntryTickets: true,
+  canViewEntrySales: true,
+  canReprintEntryTickets: true,
+  canCancelEntryTickets: true,
+  canSellRideTickets: true,
+  canViewRideSales: true,
+  canReprintRideTickets: true,
+  canCancelRideTickets: true,
 };
 
 /**

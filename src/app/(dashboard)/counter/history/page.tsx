@@ -211,8 +211,15 @@ function CancelTransactionButton({ row, saleType, onCancelled }: CancelTransacti
 
 export default function SalesHistoryPage() {
   const { addToast } = useToast();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, hasPermission } = useAuth();
   const router = useRouter();
+
+  const canViewEntry = hasPermission('canViewEntrySales');
+  const canViewRide = hasPermission('canViewRideSales');
+  const canCancelEntry = hasPermission('canCancelEntryTickets');
+  const canCancelRide = hasPermission('canCancelRideTickets');
+  const canReprintEntry = hasPermission('canReprintEntryTickets');
+  const canReprintRide = hasPermission('canReprintRideTickets');
 
   // Pagination & Filters State
   const [sales, setSales] = React.useState<any[]>([]);
@@ -226,6 +233,15 @@ export default function SalesHistoryPage() {
   const [exhibitionId, setExhibitionId] = React.useState('');
   const [paymentMethod, setPaymentMethod] = React.useState('');
 
+  // Auto-select initial permitted tab
+  React.useEffect(() => {
+    if (!canViewEntry && canViewRide) {
+      setSaleType('ride');
+    } else if (canViewEntry && !canViewRide) {
+      setSaleType('general');
+    }
+  }, [canViewEntry, canViewRide]);
+
   // Reprint State
   const [reprintLoadingId, setReprintLoadingId] = React.useState<string | null>(null);
   const [showPrintModal, setShowPrintModal] = React.useState(false);
@@ -236,7 +252,7 @@ export default function SalesHistoryPage() {
 
   // Auth role gating
   React.useEffect(() => {
-    if (!authLoading && user && user.role !== 'counter' && user.role !== 'admin') {
+    if (!authLoading && user && user.role !== 'counter' && user.role !== 'admin' && user.role !== 'super_admin') {
       router.push('/unauthorized');
     }
   }, [user, authLoading, router]);
@@ -396,29 +412,41 @@ export default function SalesHistoryPage() {
     {
       key: 'status',
       label: 'Status / Void',
-      render: (_v: any, row: any) => (
-        <CancelTransactionButton
-          row={row}
-          saleType={saleType}
-          onCancelled={loadSalesHistory}
-        />
-      ),
+      render: (_v: any, row: any) => {
+        const canCancelThis = saleType === 'ride' ? canCancelRide : canCancelEntry;
+        if (!canCancelThis && row.status !== 'cancelled') {
+          return <span className="text-xs text-gray-500 font-medium">Restricted</span>;
+        }
+        return (
+          <CancelTransactionButton
+            row={row}
+            saleType={saleType}
+            onCancelled={loadSalesHistory}
+          />
+        );
+      },
     },
     {
       key: 'actions',
       label: 'Reprint',
-      render: (_v: any, row: any) => (
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={row.status === 'cancelled'}
-          onClick={() => handleReprint(row)}
-          isLoading={reprintLoadingId === row.id}
-          leftIcon={<Printer size={12} />}
-        >
-          {row.status === 'cancelled' ? 'Voided' : 'Reprint'}
-        </Button>
-      ),
+      render: (_v: any, row: any) => {
+        const canReprintThis = saleType === 'ride' ? canReprintRide : canReprintEntry;
+        if (!canReprintThis) {
+          return <span className="text-xs text-gray-500 font-medium">Restricted</span>;
+        }
+        return (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={row.status === 'cancelled'}
+            onClick={() => handleReprint(row)}
+            isLoading={reprintLoadingId === row.id}
+            leftIcon={<Printer size={12} />}
+          >
+            {row.status === 'cancelled' ? 'Voided' : 'Reprint'}
+          </Button>
+        );
+      },
     },
   ];
 
@@ -441,34 +469,44 @@ export default function SalesHistoryPage() {
       />
 
       {/* Sales Category Tabs */}
-      <div className="flex border-b border-gray-850 mb-6 gap-2 select-none">
-        <button
-          onClick={() => {
-            setSaleType('general');
-            setPage(1);
-          }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            saleType === 'general'
-              ? 'border-accent-500 text-accent-300 font-bold'
-              : 'border-transparent text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          General Ticket Sales
-        </button>
-        <button
-          onClick={() => {
-            setSaleType('ride');
-            setPage(1);
-          }}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            saleType === 'ride'
-              ? 'border-accent-500 text-accent-300 font-bold'
-              : 'border-transparent text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          Ride Ticket Sales
-        </button>
-      </div>
+      {!canViewEntry && !canViewRide ? (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-400 mb-6">
+          You do not have permission to view entry or ride sales history logs.
+        </div>
+      ) : (
+        <div className="flex border-b border-gray-850 mb-6 gap-2 select-none">
+          {canViewEntry && (
+            <button
+              onClick={() => {
+                setSaleType('general');
+                setPage(1);
+              }}
+              className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+                saleType === 'general'
+                  ? 'border-accent-500 text-accent-300 font-bold'
+                  : 'border-transparent text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              General Ticket Sales
+            </button>
+          )}
+          {canViewRide && (
+            <button
+              onClick={() => {
+                setSaleType('ride');
+                setPage(1);
+              }}
+              className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+                saleType === 'ride'
+                  ? 'border-accent-500 text-accent-300 font-bold'
+                  : 'border-transparent text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Ride Ticket Sales
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filter and search toolbar */}
       <div className="flex flex-col md:flex-row gap-4 mb-6 bg-gray-900 border border-gray-800 p-4 rounded-xl items-end">
