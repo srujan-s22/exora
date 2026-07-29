@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { Pagination } from '@/components/ui/pagination';
 import { useToast } from '@/components/providers/toast-provider';
+import { TableSkeleton } from '@/components/shared/skeletons';
 import type { Ticket as TicketType } from '@/types/ticket.types';
 import type { Exhibition } from '@/types/exhibition.types';
 import type { PaginationMeta } from '@/types/api.types';
@@ -389,9 +390,7 @@ export default function AdminTicketsPage() {
 
       {/* Main Tickets Listing Table */}
       {isLoading ? (
-        <div className="flex flex-1 items-center justify-center py-20">
-          <Spinner size="lg" className="text-accent-500" />
-        </div>
+        <TableSkeleton rows={6} columns={7} />
       ) : tickets.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/10 p-8 text-center">
           <Ticket size={40} className="text-gray-600 mb-3 animate-pulse" />

@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/providers/toast-provider';
+import { PageHeaderSkeleton, CardGridSkeleton, TableSkeleton } from '@/components/shared/skeletons';
 import type { Ride } from '@/types/ride.types';
 import type { Exhibition } from '@/types/exhibition.types';
 
@@ -25,17 +26,17 @@ export default function AdminRidesPage() {
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
 
-  // 1. Fetch all exhibitions
+  // 1. Fetch exhibitions dropdown in background
   React.useEffect(() => {
     async function loadExhibitions() {
       try {
-        const res = await fetch('/api/exhibitions');
+        const res = await fetch('/api/exhibitions?limit=100&includeArchived=false');
         if (!res.ok) throw new Error('Failed to fetch exhibitions');
         const body = await res.json();
         if (body.success) {
-          const exhs = body.data.data || [];
+          const exhs = body.data.data || body.data || [];
           setExhibitions(exhs);
-          if (exhs.length > 0) {
+          if (exhs.length > 0 && !selectedExhibitionId) {
             setSelectedExhibitionId(exhs[0].id);
           }
         }
@@ -52,29 +53,31 @@ export default function AdminRidesPage() {
     loadExhibitions();
   }, [addToast]);
 
-  // 2. Fetch rides and stats when selectedExhibitionId or date filters change
+  // 2. Fetch rides and stats in parallel (concurrently)
   const fetchRidesAndStats = React.useCallback(async () => {
-    if (!selectedExhibitionId) return;
     setIsLoadingRides(true);
     try {
-      // Fetch rides
-      const ridesRes = await fetch(`/api/rides?exhibitionId=${selectedExhibitionId}`);
-      if (!ridesRes.ok) throw new Error('Failed to fetch rides');
-      const ridesBody = await ridesRes.json();
-      
-      // Fetch stats with date filters
-      let statsUrl = `/api/dashboard/ride-stats?exhibitionId=${selectedExhibitionId}`;
-      if (startDate) statsUrl += `&startDate=${encodeURIComponent(startDate)}`;
-      if (endDate) statsUrl += `&endDate=${encodeURIComponent(endDate)}`;
-
-      const statsRes = await fetch(statsUrl);
-      if (!statsRes.ok) throw new Error('Failed to fetch stats');
-      const statsBody = await statsRes.json();
-
-      if (ridesBody.success && statsBody.success) {
-        setRides(ridesBody.data);
-        setStats(statsBody.data);
+      let ridesUrl = '/api/rides';
+      let statsUrl = '/api/dashboard/ride-stats';
+      if (selectedExhibitionId) {
+        ridesUrl += `?exhibitionId=${selectedExhibitionId}`;
+        statsUrl += `?exhibitionId=${selectedExhibitionId}`;
+        if (startDate) statsUrl += `&startDate=${encodeURIComponent(startDate)}`;
+        if (endDate) statsUrl += `&endDate=${encodeURIComponent(endDate)}`;
       }
+
+      // Concurrently execute network calls
+      const [ridesRes, statsRes] = await Promise.all([
+        fetch(ridesUrl),
+        selectedExhibitionId ? fetch(statsUrl) : Promise.resolve(null),
+      ]);
+
+      if (ridesRes && !ridesRes.ok) throw new Error('Failed to fetch rides');
+      const ridesBody = ridesRes ? await ridesRes.json() : { success: true, data: [] };
+      const statsBody = statsRes && statsRes.ok ? await statsRes.json() : { success: true, data: [] };
+
+      if (ridesBody.success) setRides(ridesBody.data || []);
+      if (statsBody.success) setStats(statsBody.data || []);
     } catch (err: any) {
       addToast({
         type: 'error',
@@ -155,14 +158,6 @@ export default function AdminRidesPage() {
   const totalScans = stats.reduce((acc, curr) => acc + (curr.totalScans || 0), 0);
 
   const filteredRides = rides.filter(r => r.name.toLowerCase().includes(search.toLowerCase()));
-
-  if (isLoadingExhibitions) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Spinner size="lg" className="text-accent-500" />
-      </div>
-    );
-  }
 
   const exhOptions = exhibitions.map(e => ({ label: e.name, value: e.id }));
 
@@ -307,9 +302,7 @@ export default function AdminRidesPage() {
 
       {/* Main Rides Listing */}
       {isLoadingRides ? (
-        <div className="flex flex-1 items-center justify-center py-20">
-          <Spinner size="lg" className="text-accent-500" />
-        </div>
+        <TableSkeleton rows={6} columns={6} />
       ) : filteredRides.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 border border-dashed border-gray-800 rounded-xl bg-gray-900/10 p-8 text-center">
           <Gamepad2 size={40} className="text-gray-600 mb-3 animate-pulse" />

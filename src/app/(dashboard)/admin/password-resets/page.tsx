@@ -17,6 +17,7 @@ import { Card, CardTitle } from '@/components/ui/card';
 import { ContentWrapper } from '@/components/layout/content-wrapper';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
+import { TableSkeleton } from '@/components/shared/skeletons';
 import type { TableColumn, BadgeVariant } from '@/types/ui.types';
 import type { PasswordResetRequest } from '@/types/password-reset.types';
 import type { PaginationMeta } from '@/types/api.types';
@@ -410,9 +411,7 @@ export default function PasswordResetsPage() {
 
         {/* Table */}
         {isLoading ? (
-          <div className="flex flex-1 items-center justify-center py-24">
-            <Spinner size="lg" className="text-accent-500" />
-          </div>
+          <TableSkeleton rows={6} columns={6} />
         ) : requests.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center py-20 border border-dashed border-gray-800 rounded-xl bg-gray-900/10 p-8 text-center">
             <div className="h-12 w-12 rounded-xl bg-gray-800 border border-gray-700/50 flex items-center justify-center text-gray-500 mb-4 select-none">

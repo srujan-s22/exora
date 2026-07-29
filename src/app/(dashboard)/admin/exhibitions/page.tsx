@@ -11,6 +11,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Pagination } from '@/components/ui/pagination';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
+import { CardGridSkeleton } from '@/components/shared/skeletons';
 import type { Exhibition } from '@/types/exhibition.types';
 import type { PaginationMeta } from '@/types/api.types';
 
@@ -174,9 +175,7 @@ export default function AdminExhibitionsPage() {
 
       {/* Grid listing */}
       {isLoading ? (
-        <div className="flex flex-1 items-center justify-center py-24">
-          <Spinner size="lg" className="text-accent-500" />
-        </div>
+        <CardGridSkeleton count={6} columns={3} />
       ) : exhibitions.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center py-20 border border-dashed border-gray-800 rounded-xl bg-gray-900/10 p-8 text-center">
           <div className="h-12 w-12 rounded-xl bg-gray-800 border border-gray-700/50 flex items-center justify-center text-gray-500 mb-4 select-none">

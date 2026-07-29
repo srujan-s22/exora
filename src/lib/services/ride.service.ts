@@ -777,20 +777,38 @@ export const RideService = {
       scanQuery.scannedAt = dateFilter;
     }
 
-    const ticketsSold = await RideTicketModel.countDocuments(ticketQuery);
-
-    const revenueResult = await RideSaleModel.aggregate([
-      { $match: saleQuery },
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+    const [ticketsSold, revenueResult, scanStats] = await Promise.all([
+      RideTicketModel.countDocuments(ticketQuery),
+      RideSaleModel.aggregate([
+        { $match: saleQuery },
+        { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+      ]),
+      RideScanModel.aggregate([
+        { $match: scanQuery },
+        {
+          $group: {
+            _id: null,
+            totalScans: { $sum: 1 },
+            admittedCount: {
+              $sum: {
+                $cond: [{ $eq: ['$result', 'admitted'] }, { $ifNull: ['$admittedCount', 1] }, 0],
+              },
+            },
+            admittedScansCount: {
+              $sum: {
+                $cond: [{ $eq: ['$result', 'admitted'] }, 1, 0],
+              },
+            },
+          },
+        },
+      ]),
     ]);
-    const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
 
-    const totalScans = await RideScanModel.countDocuments(scanQuery);
-    const admittedScans = await RideScanModel.find({ ...scanQuery, result: 'admitted' })
-      .select('admittedCount')
-      .lean();
-    const admittedCount = admittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
-    const rejectedCount = totalScans - admittedScans.length;
+    const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
+    const stats = scanStats.length > 0 ? scanStats[0] : { totalScans: 0, admittedCount: 0, admittedScansCount: 0 };
+    const totalScans = stats.totalScans;
+    const admittedCount = stats.admittedCount;
+    const rejectedCount = totalScans - stats.admittedScansCount;
 
     return {
       rideId,
@@ -803,6 +821,93 @@ export const RideService = {
       admittedCount,
       rejectedCount,
     };
+  },
+
+  async getExhibitionRideStats(exhibitionId: string, startDate?: string, endDate?: string): Promise<Record<string, any>[]> {
+    await connectToDatabase();
+    const exhObjectId = new mongoose.Types.ObjectId(exhibitionId);
+
+    const rides = await RideModel.find({ exhibitionId: exhObjectId, isActive: true }).select('name price status').lean();
+    if (rides.length === 0) return [];
+
+    const rideObjectIds = rides.map((r: any) => r._id);
+
+    const ticketQuery: Record<string, any> = { rideId: { $in: rideObjectIds }, status: { $ne: 'cancelled' } };
+    const saleQuery: Record<string, any> = { rideId: { $in: rideObjectIds }, status: { $ne: 'cancelled' } };
+    const scanQuery: Record<string, any> = { rideId: { $in: rideObjectIds } };
+
+    if (startDate || endDate) {
+      const dateFilter: Record<string, any> = {};
+      if (startDate) {
+        const sDate = new Date(startDate);
+        sDate.setHours(0, 0, 0, 0);
+        dateFilter.$gte = sDate;
+      }
+      if (endDate) {
+        const eDate = new Date(endDate);
+        eDate.setHours(23, 59, 59, 999);
+        dateFilter.$lte = eDate;
+      }
+      ticketQuery.createdAt = dateFilter;
+      saleQuery.soldAt = dateFilter;
+      scanQuery.scannedAt = dateFilter;
+    }
+
+    const [ticketsAgg, salesAgg, scansAgg] = await Promise.all([
+      RideTicketModel.aggregate([
+        { $match: ticketQuery },
+        { $group: { _id: '$rideId', ticketsSold: { $sum: 1 } } },
+      ]),
+      RideSaleModel.aggregate([
+        { $match: saleQuery },
+        { $group: { _id: '$rideId', totalRevenue: { $sum: '$totalAmount' } } },
+      ]),
+      RideScanModel.aggregate([
+        { $match: scanQuery },
+        {
+          $group: {
+            _id: '$rideId',
+            totalScans: { $sum: 1 },
+            admittedCount: {
+              $sum: {
+                $cond: [{ $eq: ['$result', 'admitted'] }, { $ifNull: ['$admittedCount', 1] }, 0],
+              },
+            },
+            admittedScansCount: {
+              $sum: {
+                $cond: [{ $eq: ['$result', 'admitted'] }, 1, 0],
+              },
+            },
+          },
+        },
+      ]),
+    ]);
+
+    const ticketsMap = new Map(ticketsAgg.map((t: any) => [t._id.toString(), t.ticketsSold]));
+    const salesMap = new Map(salesAgg.map((s: any) => [s._id.toString(), s.totalRevenue]));
+    const scansMap = new Map(scansAgg.map((sc: any) => [sc._id.toString(), sc]));
+
+    return rides.map((ride: any) => {
+      const rideIdStr = ride._id.toString();
+      const ticketsSold = ticketsMap.get(rideIdStr) || 0;
+      const totalRevenue = salesMap.get(rideIdStr) || 0;
+      const scanData = scansMap.get(rideIdStr) || { totalScans: 0, admittedCount: 0, admittedScansCount: 0 };
+      const totalScans = scanData.totalScans || 0;
+      const admittedCount = scanData.admittedCount || 0;
+      const rejectedCount = totalScans - (scanData.admittedScansCount || 0);
+
+      return {
+        rideId: rideIdStr,
+        name: ride.name,
+        price: ride.price,
+        status: ride.status,
+        ticketsSold,
+        totalRevenue,
+        totalScans,
+        admittedCount,
+        rejectedCount,
+      };
+    });
   },
 
   async getStaffDashboardData(staffUserId: string): Promise<Record<string, any> | null> {

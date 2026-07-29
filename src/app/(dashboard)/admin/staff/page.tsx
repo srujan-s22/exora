@@ -86,8 +86,9 @@ export default function StaffManagementPage() {
     return () => clearTimeout(handler);
   }, [search]);
 
-  // Fetch exhibitions for assign dropdown
+  // Fetch exhibitions lazily for assign dropdown when modal opens
   React.useEffect(() => {
+    if (!showCreateModal || exhibitions.length > 0) return;
     async function loadExhibitions() {
       try {
         const res = await fetch('/api/exhibitions?limit=100&includeArchived=false');
@@ -101,7 +102,7 @@ export default function StaffManagementPage() {
       }
     }
     loadExhibitions();
-  }, []);
+  }, [showCreateModal, exhibitions.length]);
 
   // Fetch staff
   const fetchStaff = React.useCallback(async () => {
@@ -490,8 +491,29 @@ export default function StaffManagementPage() {
 
         {/* Table */}
         {isLoading ? (
-          <div className="flex flex-1 items-center justify-center py-24">
-            <Spinner size="lg" className="text-accent-500" />
+          <div className="rounded-xl border border-gray-800 bg-gray-900/60 overflow-hidden divide-y divide-gray-850">
+            <div className="p-4 bg-gray-850/40 flex gap-6 items-center">
+              <div className="h-4 w-20 skeleton" />
+              <div className="h-4 w-32 skeleton" />
+              <div className="h-4 w-20 skeleton" />
+              <div className="h-4 w-16 skeleton" />
+              <div className="h-4 w-24 skeleton" />
+            </div>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="p-4 flex gap-6 items-center">
+                <div className="h-4 w-16 skeleton" />
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="h-8 w-8 rounded-lg skeleton shrink-0" />
+                  <div className="space-y-1.5 flex-1">
+                    <div className="h-4 w-36 skeleton" />
+                    <div className="h-3 w-24 skeleton" />
+                  </div>
+                </div>
+                <div className="h-5 w-20 skeleton rounded-full" />
+                <div className="h-4 w-16 skeleton" />
+                <div className="h-4 w-28 skeleton" />
+              </div>
+            ))}
           </div>
         ) : staff.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center py-20 border border-dashed border-gray-800 rounded-xl bg-gray-900/10 p-8 text-center">

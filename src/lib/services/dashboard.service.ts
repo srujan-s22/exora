@@ -14,66 +14,6 @@ export const DashboardService = {
   async getAdminMetrics(): Promise<Record<string, any>> {
     await connectToDatabase();
 
-    // 1. Fetch active sales with lean & selective fields
-    const sales = await SaleModel.find({ status: { $ne: 'cancelled' } })
-      .select('totalAmount ticketCount paymentMethod')
-      .lean();
-
-    let totalRevenue = 0;
-    let ticketsSold = 0;
-    let cashRevenue = 0;
-    let upiRevenue = 0;
-    let cashTickets = 0;
-    let upiTickets = 0;
-
-    for (const s of sales) {
-      totalRevenue += s.totalAmount || 0;
-      ticketsSold += s.ticketCount || 0;
-      if (s.paymentMethod === 'cash') {
-        cashRevenue += s.totalAmount || 0;
-        cashTickets += s.ticketCount || 0;
-      } else if (s.paymentMethod === 'upi') {
-        upiRevenue += s.totalAmount || 0;
-        upiTickets += s.ticketCount || 0;
-      }
-    }
-
-    // 1b. Fetch cancelled sales metrics with lean & selective fields
-    const cancelledSales = await SaleModel.find({ status: 'cancelled' })
-      .select('totalAmount ticketCount')
-      .lean();
-    let cancelledRevenue = 0;
-    let cancelledTickets = 0;
-    for (const cs of cancelledSales) {
-      cancelledRevenue += cs.totalAmount || 0;
-      cancelledTickets += cs.ticketCount || 0;
-    }
-
-    const grossRevenue = totalRevenue + cancelledRevenue;
-    const grossTickets = ticketsSold + cancelledTickets;
-
-    // 2. Scans logs aggregations (lean & selective fields)
-    const scans = await TicketScanModel.find({})
-      .select('result admittedCount')
-      .lean();
-    let validEntries = 0;
-    let invalidScans = 0;
-    let duplicateBlocks = 0;
-    let wrongExhibitions = 0;
-    let forgedAttempts = 0;
-
-    for (const sc of scans) {
-      if (sc.result === 'admitted') {
-        validEntries += sc.admittedCount || 1;
-      } else {
-        invalidScans++;
-        if (sc.result === 'rejected_used') duplicateBlocks++;
-        else if (sc.result === 'rejected_wrong_exhibition') wrongExhibitions++;
-        else if (sc.result === 'rejected_unknown') forgedAttempts++;
-      }
-    }
-
-    // 3. Today's stats vs yesterday's (Trend computations)
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const endOfToday = new Date();
@@ -82,67 +22,228 @@ export const DashboardService = {
     const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
     const endOfYesterday = new Date(endOfToday.getTime() - 24 * 60 * 60 * 1000);
 
-    const todaySales = await SaleModel.find({ soldAt: { $gte: startOfToday, $lte: endOfToday }, status: { $ne: 'cancelled' } })
-      .select('totalAmount ticketCount')
-      .lean();
-    let todayRevenue = 0;
-    let todayTickets = 0;
-    for (const s of todaySales) {
-      todayRevenue += s.totalAmount || 0;
-      todayTickets += s.ticketCount || 0;
-    }
+    // Run independent top-level aggregations and queries concurrently in parallel
+    const [
+      salesAggResult,
+      scansAggResult,
+      todaySalesAggResult,
+      yesterdaySalesAggResult,
+      todayScansAggResult,
+      activeExhibitionsCount,
+      staffCount,
+      allExhibitions,
+      recentSalesDocs,
+      recentScansDocs,
+    ] = await Promise.all([
+      // 1. All-time Sales Aggregation (Active + Cancelled + Cash/UPI breakdown)
+      SaleModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalRevenue: {
+              $sum: { $cond: [{ $ne: ['$status', 'cancelled'] }, { $ifNull: ['$totalAmount', 0] }, 0] }
+            },
+            ticketsSold: {
+              $sum: { $cond: [{ $ne: ['$status', 'cancelled'] }, { $ifNull: ['$ticketCount', 0] }, 0] }
+            },
+            cashRevenue: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $ne: ['$status', 'cancelled'] }, { $eq: ['$paymentMethod', 'cash'] }] },
+                  { $ifNull: ['$totalAmount', 0] },
+                  0
+                ]
+              }
+            },
+            cashTickets: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $ne: ['$status', 'cancelled'] }, { $eq: ['$paymentMethod', 'cash'] }] },
+                  { $ifNull: ['$ticketCount', 0] },
+                  0
+                ]
+              }
+            },
+            upiRevenue: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $ne: ['$status', 'cancelled'] }, { $eq: ['$paymentMethod', 'upi'] }] },
+                  { $ifNull: ['$totalAmount', 0] },
+                  0
+                ]
+              }
+            },
+            upiTickets: {
+              $sum: {
+                $cond: [
+                  { $and: [{ $ne: ['$status', 'cancelled'] }, { $eq: ['$paymentMethod', 'upi'] }] },
+                  { $ifNull: ['$ticketCount', 0] },
+                  0
+                ]
+              }
+            },
+            cancelledRevenue: {
+              $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, { $ifNull: ['$totalAmount', 0] }, 0] }
+            },
+            cancelledTickets: {
+              $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, { $ifNull: ['$ticketCount', 0] }, 0] }
+            },
+          }
+        }
+      ]),
 
-    const yesterdaySales = await SaleModel.find({ soldAt: { $gte: startOfYesterday, $lte: endOfYesterday }, status: { $ne: 'cancelled' } })
-      .select('totalAmount')
-      .lean();
-    let yesterdayRevenue = 0;
-    for (const s of yesterdaySales) {
-      yesterdayRevenue += s.totalAmount || 0;
-    }
+      // 2. All-time Ticket Scans Aggregation
+      TicketScanModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            validEntries: {
+              $sum: { $cond: [{ $eq: ['$result', 'admitted'] }, { $ifNull: ['$admittedCount', 1] }, 0] }
+            },
+            invalidScans: {
+              $sum: { $cond: [{ $ne: ['$result', 'admitted'] }, 1, 0] }
+            },
+            duplicateBlocks: {
+              $sum: { $cond: [{ $eq: ['$result', 'rejected_used'] }, 1, 0] }
+            },
+            wrongExhibitions: {
+              $sum: { $cond: [{ $eq: ['$result', 'rejected_wrong_exhibition'] }, 1, 0] }
+            },
+            forgedAttempts: {
+              $sum: { $cond: [{ $eq: ['$result', 'rejected_unknown'] }, 1, 0] }
+            },
+          }
+        }
+      ]),
 
-    const todayScans = await TicketScanModel.countDocuments({ scannedAt: { $gte: startOfToday, $lte: endOfToday } });
-    const todayAdmittedScans = await TicketScanModel.find({ scannedAt: { $gte: startOfToday, $lte: endOfToday }, result: 'admitted' })
-      .select('admittedCount')
-      .lean();
-    const todayAdmitted = todayAdmittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
-    const todayFlags = await TicketScanModel.countDocuments({ scannedAt: { $gte: startOfToday, $lte: endOfToday }, result: { $regex: /^rejected_/ } });
+      // 3a. Today Sales Aggregation
+      SaleModel.aggregate([
+        { $match: { soldAt: { $gte: startOfToday, $lte: endOfToday }, status: { $ne: 'cancelled' } } },
+        {
+          $group: {
+            _id: null,
+            todayRevenue: { $sum: { $ifNull: ['$totalAmount', 0] } },
+            todayTickets: { $sum: { $ifNull: ['$ticketCount', 0] } },
+          }
+        }
+      ]),
 
-    // 4. Counts of entities
-    const activeExhibitionsCount = await ExhibitionModel.countDocuments({ status: 'active', archive: { $ne: true } });
-    const staffCount = await UserModel.countDocuments({ role: { $ne: 'admin' }, isActive: true });
+      // 3b. Yesterday Sales Aggregation
+      SaleModel.aggregate([
+        { $match: { soldAt: { $gte: startOfYesterday, $lte: endOfYesterday }, status: { $ne: 'cancelled' } } },
+        {
+          $group: {
+            _id: null,
+            yesterdayRevenue: { $sum: { $ifNull: ['$totalAmount', 0] } },
+          }
+        }
+      ]),
 
-    // 5. Exhibition wise analytics breakdown (Batched aggregate queries to eliminate N+1)
-    const allExhibitions = await ExhibitionModel.find({ archive: { $ne: true } })
-      .sort({ createdAt: -1, _id: -1 })
-      .lean();
-    
-    const exhIds = allExhibitions.map((e) => e._id);
+      // 3c. Today Scans Aggregation
+      TicketScanModel.aggregate([
+        { $match: { scannedAt: { $gte: startOfToday, $lte: endOfToday } } },
+        {
+          $group: {
+            _id: null,
+            todayScans: { $sum: 1 },
+            todayAdmitted: {
+              $sum: { $cond: [{ $eq: ['$result', 'admitted'] }, { $ifNull: ['$admittedCount', 1] }, 0] }
+            },
+            todayFlags: {
+              $sum: { $cond: [{ $regexMatch: { input: '$result', regex: /^rejected_/ } }, 1, 0] }
+            },
+          }
+        }
+      ]),
 
-    // Batch query 1: Sold tickets per exhibition
-    const ticketCountsAgg = await TicketModel.aggregate([
-      { $match: { exhibitionId: { $in: exhIds }, status: { $ne: 'cancelled' } } },
-      { $group: { _id: '$exhibitionId', count: { $sum: 1 } } },
+      // 4. Entity Counts
+      ExhibitionModel.countDocuments({ status: 'active', archive: { $ne: true } }),
+      UserModel.countDocuments({ role: { $ne: 'admin' }, isActive: true }),
+
+      // 5. All Exhibitions for breakdown
+      ExhibitionModel.find({ archive: { $ne: true } })
+        .sort({ createdAt: -1, _id: -1 })
+        .lean(),
+
+      // 6. Recent feeds
+      SaleModel.find({})
+        .sort({ soldAt: -1, _id: -1 })
+        .limit(6)
+        .populate('soldBy', 'name staffId')
+        .populate('exhibitionId', 'name')
+        .lean(),
+
+      TicketScanModel.find({})
+        .sort({ scannedAt: -1, _id: -1 })
+        .limit(6)
+        .populate('scannedBy', 'name staffId')
+        .populate('exhibitionId', 'name')
+        .populate('ticketId', 'ticketNumber')
+        .lean(),
     ]);
+
+    // Extract aggregated sales stats
+    const salesStats = salesAggResult[0] || {};
+    const totalRevenue = salesStats.totalRevenue || 0;
+    const ticketsSold = salesStats.ticketsSold || 0;
+    const cashRevenue = salesStats.cashRevenue || 0;
+    const cashTickets = salesStats.cashTickets || 0;
+    const upiRevenue = salesStats.upiRevenue || 0;
+    const upiTickets = salesStats.upiTickets || 0;
+    const cancelledRevenue = salesStats.cancelledRevenue || 0;
+    const cancelledTickets = salesStats.cancelledTickets || 0;
+    const grossRevenue = totalRevenue + cancelledRevenue;
+    const grossTickets = ticketsSold + cancelledTickets;
+
+    // Extract aggregated scans stats
+    const scanStats = scansAggResult[0] || {};
+    const validEntries = scanStats.validEntries || 0;
+    const invalidScans = scanStats.invalidScans || 0;
+    const duplicateBlocks = scanStats.duplicateBlocks || 0;
+    const wrongExhibitions = scanStats.wrongExhibitions || 0;
+    const forgedAttempts = scanStats.forgedAttempts || 0;
+
+    // Extract today & yesterday trends
+    const todaySalesStats = todaySalesAggResult[0] || {};
+    const todayRevenue = todaySalesStats.todayRevenue || 0;
+    const todayTickets = todaySalesStats.todayTickets || 0;
+
+    const yesterdaySalesStats = yesterdaySalesAggResult[0] || {};
+    const yesterdayRevenue = yesterdaySalesStats.yesterdayRevenue || 0;
+
+    const todayScanStats = todayScansAggResult[0] || {};
+    const todayScans = todayScanStats.todayScans || 0;
+    const todayAdmitted = todayScanStats.todayAdmitted || 0;
+    const todayFlags = todayScanStats.todayFlags || 0;
+
+    // Exhibition wise analytics breakdown (Batched aggregate queries to eliminate N+1)
+    const exhIds = allExhibitions.map((e: any) => e._id);
+
+    const [ticketCountsAgg, salesRevAgg, admittedAgg] = await Promise.all([
+      TicketModel.aggregate([
+        { $match: { exhibitionId: { $in: exhIds }, status: { $ne: 'cancelled' } } },
+        { $group: { _id: '$exhibitionId', count: { $sum: 1 } } },
+      ]),
+      SaleModel.aggregate([
+        { $match: { exhibitionId: { $in: exhIds }, status: { $ne: 'cancelled' } } },
+        { $group: { _id: '$exhibitionId', total: { $sum: '$totalAmount' } } },
+      ]),
+      TicketScanModel.aggregate([
+        { $match: { exhibitionId: { $in: exhIds }, result: 'admitted' } },
+        { $group: { _id: '$exhibitionId', totalAdmitted: { $sum: { $ifNull: ['$admittedCount', 1] } } } },
+      ]),
+    ]);
+
     const ticketCountMap = new Map<string, number>();
-    ticketCountsAgg.forEach((t) => ticketCountMap.set(t._id.toString(), t.count));
+    ticketCountsAgg.forEach((t: any) => ticketCountMap.set(t._id.toString(), t.count));
 
-    // Batch query 2: Sales revenue per exhibition
-    const salesRevAgg = await SaleModel.aggregate([
-      { $match: { exhibitionId: { $in: exhIds }, status: { $ne: 'cancelled' } } },
-      { $group: { _id: '$exhibitionId', total: { $sum: '$totalAmount' } } },
-    ]);
     const salesRevMap = new Map<string, number>();
-    salesRevAgg.forEach((s) => salesRevMap.set(s._id.toString(), s.total));
+    salesRevAgg.forEach((s: any) => salesRevMap.set(s._id.toString(), s.total));
 
-    // Batch query 3: Admitted count per exhibition
-    const admittedAgg = await TicketScanModel.aggregate([
-      { $match: { exhibitionId: { $in: exhIds }, result: 'admitted' } },
-      { $group: { _id: '$exhibitionId', totalAdmitted: { $sum: { $ifNull: ['$admittedCount', 1] } } } },
-    ]);
     const admittedMap = new Map<string, number>();
-    admittedAgg.forEach((a) => admittedMap.set(a._id.toString(), a.totalAdmitted));
+    admittedAgg.forEach((a: any) => admittedMap.set(a._id.toString(), a.totalAdmitted));
 
-    const exhibitionBreakdown = allExhibitions.map((exh) => {
+    const exhibitionBreakdown = allExhibitions.map((exh: any) => {
       const exhIdStr = exh._id.toString();
       const soldCount = ticketCountMap.get(exhIdStr) || 0;
       const rev = salesRevMap.get(exhIdStr) || 0;
@@ -161,22 +262,7 @@ export const DashboardService = {
       };
     });
 
-    // 6. Recent feeds with lean & selective populate
-    const recentSalesDocs = await SaleModel.find({})
-      .sort({ soldAt: -1, _id: -1 })
-      .limit(6)
-      .populate('soldBy', 'name staffId')
-      .populate('exhibitionId', 'name')
-      .lean();
-
-    const recentScansDocs = await TicketScanModel.find({})
-      .sort({ scannedAt: -1, _id: -1 })
-      .limit(6)
-      .populate('scannedBy', 'name staffId')
-      .populate('exhibitionId', 'name')
-      .populate('ticketId', 'ticketNumber')
-      .lean();
-
+    // Format recent feeds
     const recentSales = recentSalesDocs.map((s: any) => ({
       ...s,
       id: s._id.toString(),

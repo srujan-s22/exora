@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/providers/toast-provider';
+import { StatCardSkeletonGrid, TableSkeleton } from '@/components/shared/skeletons';
 
 export default function ReconciliationPage() {
   const { addToast } = useToast();
@@ -75,9 +76,9 @@ export default function ReconciliationPage() {
   if (isLoading) {
     return (
       <ContentWrapper>
-        <div className="flex min-h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-300" />
-        </div>
+        <PageHeader title="Sales & Gate Entry Matching" description="Compares ticket sales against gate entries to detect any cash or attendance differences." showDivider />
+        <StatCardSkeletonGrid columns={4} />
+        <TableSkeleton rows={6} columns={6} />
       </ContentWrapper>
     );
   }

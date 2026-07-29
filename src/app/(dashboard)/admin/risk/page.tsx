@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/providers/toast-provider';
+import { StatCardSkeletonGrid, TableSkeleton } from '@/components/shared/skeletons';
 import Link from 'next/link';
 
 export default function RiskProfilesPage() {
@@ -85,9 +86,9 @@ export default function RiskProfilesPage() {
   if (isLoading) {
     return (
       <ContentWrapper>
-        <div className="flex min-h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-300" />
-        </div>
+        <PageHeader title="Staff & Event Risk Overview" description="Monitors risk levels for staff counters and events based on scan and sales patterns." showDivider />
+        <StatCardSkeletonGrid columns={3} />
+        <TableSkeleton rows={6} columns={5} />
       </ContentWrapper>
     );
   }

@@ -11,6 +11,7 @@ import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui/spinner';
+import { TableSkeleton } from '@/components/shared/skeletons';
 import { History, RefreshCw, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
@@ -165,9 +166,8 @@ export default function RideScanHistoryPage() {
   if (authLoading || (loading && !assignedRide)) {
     return (
       <ContentWrapper>
-        <div className="flex h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-500" />
-        </div>
+        <PageHeader title="Ride Scan Logs" description="View validation check history and duplicate block logs at this terminal." showDivider />
+        <TableSkeleton rows={6} columns={5} showSearch />
       </ContentWrapper>
     );
   }
@@ -241,9 +241,7 @@ export default function RideScanHistoryPage() {
 
       {/* Table grid */}
       {loading ? (
-        <div className="flex h-[35dvh] items-center justify-center bg-gray-900 border border-gray-800 rounded-xl p-8">
-          <Spinner className="text-accent-500" />
-        </div>
+        <TableSkeleton rows={6} columns={5} />
       ) : scans.length === 0 ? (
         <div className="text-center bg-gray-900 border border-gray-800 rounded-xl p-12">
           <p className="text-gray-400">No ticket entrance scans matching filter criteria found.</p>

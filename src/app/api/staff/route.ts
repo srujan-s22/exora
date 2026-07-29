@@ -62,18 +62,31 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const total = await UserModel.countDocuments(query);
-    const staff = await UserModel.find(query)
-      .select('name staffId phoneNumber email role permissions isActive assignedExhibitions lastLoginAt createdAt')
-      .populate('assignedExhibitions', 'name')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    const [total, staff] = await Promise.all([
+      UserModel.countDocuments(query),
+      UserModel.find(query)
+        .select('name staffId phoneNumber email role permissions isActive assignedExhibitions lastLoginAt createdAt')
+        .populate('assignedExhibitions', 'name')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    const formattedStaff = staff.map((s: any) => ({
+      ...s,
+      id: s._id.toString(),
+      _id: s._id.toString(),
+      assignedExhibitions: (s.assignedExhibitions || []).map((e: any) => ({
+        ...e,
+        id: e._id ? e._id.toString() : e.id,
+      })),
+    }));
 
     const totalPages = Math.ceil(total / limit);
 
     return paginatedResponse(
-      staff.map((s) => s.toJSON()),
+      formattedStaff,
       {
         total,
         page,

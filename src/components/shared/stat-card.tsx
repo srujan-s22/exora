@@ -1,6 +1,12 @@
-import * as React from 'react';
-import * as Icons from 'lucide-react';
+import { Banknote, Ticket, ScanLine, ShieldCheck, HelpCircle } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
+
+const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  Banknote,
+  Ticket,
+  ScanLine,
+  ShieldCheck,
+};
 
 export interface StatCardProps {
   title: string;
@@ -12,7 +18,7 @@ export interface StatCardProps {
 }
 
 export function StatCard({ title, value, icon, change, changeLabel = 'vs last week', isLoading = false }: StatCardProps) {
-  const IconComponent = (Icons as any)[icon] || Icons.HelpCircle;
+  const IconComponent = ICON_MAP[icon] || HelpCircle;
 
   const isPositive = change !== undefined && change >= 0;
 

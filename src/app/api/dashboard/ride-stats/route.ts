@@ -46,9 +46,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (exhibitionId) {
-      const rides = await RideService.list({ exhibitionId });
-      const statsPromises = rides.map(r => RideService.getStats(r.id, startDate, endDate));
-      const allStats = await Promise.all(statsPromises);
+      const allStats = await RideService.getExhibitionRideStats(exhibitionId, startDate, endDate);
       return successResponse(allStats);
     }
 

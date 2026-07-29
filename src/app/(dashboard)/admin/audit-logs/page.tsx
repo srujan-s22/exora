@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
+import { TableSkeleton } from '@/components/shared/skeletons';
 
 export default function AuditLogsPage() {
   const { addToast } = useToast();
@@ -274,8 +275,8 @@ export default function AuditLogsPage() {
       <Card className="border border-gray-800 bg-gray-900 shadow-lg">
         <CardContent className="p-0 overflow-x-auto">
           {isLoading ? (
-            <div className="flex h-48 items-center justify-center">
-              <Spinner size="md" className="text-accent-300" />
+            <div className="p-4">
+              <TableSkeleton rows={6} columns={6} />
             </div>
           ) : logs.length === 0 ? (
             <div className="py-12 text-center text-gray-500">

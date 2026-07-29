@@ -283,8 +283,36 @@ export default function CounterDashboardPage() {
   if (authLoading || dataLoading) {
     return (
       <ContentWrapper>
-        <div className="flex h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-500" />
+        <PageHeader title="Ticket Counter" description="Process walk-in Cash and UPI ticket sales quickly." showDivider />
+        <div className="grid gap-5 sm:grid-cols-3 mb-8">
+          <StatCard title="Tickets Issued (Today)" value="—" icon="Ticket" isLoading />
+          <StatCard title="Total Sales Collected" value="—" icon="Banknote" isLoading />
+          <StatCard title="UPI Payments Share" value="—" icon="Smartphone" isLoading />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-1">
+            <Card className="p-6 border border-gray-800 bg-gray-900 space-y-4">
+              <div className="h-4 w-36 skeleton mb-4" />
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="h-3 w-24 skeleton" />
+                  <div className="h-9 w-full rounded-lg skeleton" />
+                </div>
+              ))}
+            </Card>
+          </div>
+          <div className="lg:col-span-2">
+            <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 space-y-4">
+              <div className="h-4 w-40 skeleton" />
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex gap-4 items-center py-2 border-t border-gray-850">
+                  <div className="h-4 w-24 skeleton" />
+                  <div className="h-4 flex-1 skeleton" />
+                  <div className="h-4 w-16 skeleton" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </ContentWrapper>
     );

@@ -28,6 +28,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { DataTable } from '@/components/ui/data-table';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
+import { TableSkeleton } from '@/components/shared/skeletons';
 import type { UserRoleType } from '@/lib/config/roles';
 import type { TableColumn } from '@/types/ui.types';
 
@@ -447,9 +448,7 @@ export default function AdminNotificationsPage() {
         </div>
 
         {isLoadingHistory ? (
-          <div className="py-12 flex justify-center">
-            <Spinner size="lg" className="text-accent-400" />
-          </div>
+          <TableSkeleton rows={4} columns={5} />
         ) : historyLogs.length === 0 ? (
           <div className="p-8 border border-dashed border-gray-800 rounded-xl text-center text-xs text-gray-500">
             No broadcast notifications have been sent yet.

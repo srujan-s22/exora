@@ -38,6 +38,7 @@ import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/providers/toast-provider';
+import { StatCardSkeletonGrid, ChartSkeletonFrame, TableSkeleton } from '@/components/shared/skeletons';
 import { useAuth } from '@/components/providers/auth-provider';
 import type { Exhibition } from '@/types/exhibition.types';
 
@@ -250,8 +251,16 @@ export default function AnalyticsDashboardPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex min-h-[40dvh] items-center justify-center py-20">
-          <Spinner size="lg" className="text-accent-400" />
+        <div className="space-y-8">
+          <StatCardSkeletonGrid columns={4} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ChartSkeletonFrame title="Revenue & Ticket Trends" />
+            <ChartSkeletonFrame title="Gate Traffic & Entry Load" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <TableSkeleton rows={5} columns={4} />
+            <TableSkeleton rows={5} columns={4} />
+          </div>
         </div>
       ) : (
         <div className="space-y-8">

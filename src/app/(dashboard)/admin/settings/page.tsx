@@ -15,6 +15,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
+import { FormSkeletonBlock } from '@/components/shared/skeletons';
 import { QRDisplay } from '@/components/shared/qr-display';
 import type { IPrintConfig } from '@/lib/db/models/system-settings.model';
 
@@ -374,9 +375,16 @@ export default function SettingsPage() {
   if (isLoading) {
     return (
       <ContentWrapper>
-        <PageHeader title="Settings" description="System configuration and preferences." showDivider />
-        <div className="flex h-64 items-center justify-center">
-          <Spinner size="lg" className="text-accent-500" />
+        <PageHeader title="Settings & Setup" description="Configure your personal profile details, set local client behaviors, and manage system branding rules." showDivider />
+        <div className="flex flex-col md:flex-row gap-6 items-start">
+          <div className="w-full md:w-64 shrink-0 space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-11 w-full rounded-lg skeleton" />
+            ))}
+          </div>
+          <div className="flex-1 w-full">
+            <FormSkeletonBlock fields={4} />
+          </div>
         </div>
       </ContentWrapper>
     );

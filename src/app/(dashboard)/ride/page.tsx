@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { StatCard } from '@/components/shared/stat-card';
 import { DataTable } from '@/components/ui/data-table';
 import { StatusIndicator } from '@/components/shared/status-indicator';
+import { Card } from '@/components/ui/card';
 
 export default function RideStaffDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -132,8 +133,21 @@ export default function RideStaffDashboard() {
   if (authLoading || dataLoading) {
     return (
       <ContentWrapper>
-        <div className="flex h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-500" />
+        <PageHeader title="Ride Operator Dashboard" description="Shift summary and entrance activity for your assigned ride." showDivider />
+        <div className="grid gap-5 sm:grid-cols-3 mb-8">
+          <StatCard title="Total Boarding Scans" value="—" icon="ScanLine" isLoading />
+          <StatCard title="Valid Entries" value="—" icon="CheckCircle2" isLoading />
+          <StatCard title="Denied Passes" value="—" icon="ShieldAlert" isLoading />
+        </div>
+        <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 space-y-4">
+          <div className="h-4 w-40 skeleton" />
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex gap-4 items-center py-2 border-t border-gray-850">
+              <div className="h-4 w-24 skeleton" />
+              <div className="h-4 flex-1 skeleton" />
+              <div className="h-4 w-16 skeleton" />
+            </div>
+          ))}
         </div>
       </ContentWrapper>
     );

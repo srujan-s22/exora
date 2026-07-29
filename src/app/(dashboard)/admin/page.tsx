@@ -58,8 +58,8 @@ export default function AdminDashboardPage() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // Derived filtered metrics
-  const getFilteredMetrics = () => {
+  // Derived filtered metrics memoized
+  const metrics = React.useMemo(() => {
     if (!dashboardData) return null;
 
     const { stats, paymentBreakdown, exhibitionBreakdown, recentSales, recentScans } = dashboardData;
@@ -150,12 +150,10 @@ export default function AdminDashboardPage() {
       cashTickets,
       upiTickets
     };
-  };
+  }, [dashboardData, selectedExhibitionId, selectedPaymentMethod]);
 
-  const metrics = getFilteredMetrics();
-
-  // Combine Sales & Scans into unified audit feed
-  const getUnifiedFeed = (): ActivityItem[] => {
+  // Combine Sales & Scans into unified audit feed memoized
+  const feedItems = React.useMemo((): ActivityItem[] => {
     if (!dashboardData) return [];
     const { recentSales, recentScans } = dashboardData;
 
@@ -185,7 +183,7 @@ export default function AdminDashboardPage() {
     return [...saleLogs, ...scanLogs]
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       .slice(0, 8);
-  };
+  }, [dashboardData]);
 
   const handleExportCSV = () => {
     if (!dashboardData) return;
@@ -211,23 +209,6 @@ export default function AdminDashboardPage() {
       message: 'Exhibition metrics exported to CSV successfully.',
     });
   };
-
-  if (isLoading) {
-    return (
-      <ContentWrapper>
-        <div className="flex min-h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-300" />
-        </div>
-      </ContentWrapper>
-    );
-  }
-
-  const feedItems = getUnifiedFeed();
-
-  // Graph plotting coordinates helper
-  const svgWidth = 500;
-  const svgHeight = 160;
-  const padding = 20;
 
   // Render inline custom premium charts
   const upiPercent = metrics ? (metrics.upiRevenue / ((metrics.upiRevenue + metrics.cashRevenue) || 1)) * 100 : 50;
@@ -299,41 +280,39 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Stats Cards Section */}
-      {metrics && (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          <StatCard
-            title="Total Revenue"
-            value={`₹${(metrics.totalRevenue / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
-            icon="Banknote"
-            change={metrics.revenueChange}
-            changeLabel="vs yesterday"
-            isLoading={isRefreshing}
-          />
-          <StatCard
-            title="Tickets Issued"
-            value={metrics.ticketsSold}
-            icon="Ticket"
-            change={metrics.todayTickets > 0 ? 100 : undefined}
-            changeLabel={`${metrics.todayTickets} sold today`}
-            isLoading={isRefreshing}
-          />
-          <StatCard
-            title="Successful Gate Scans"
-            value={metrics.validEntries}
-            icon="ScanLine"
-            change={undefined}
-            isLoading={isRefreshing}
-          />
-          <StatCard
-            title="Gate Security Alerts"
-            value={metrics.invalidScans}
-            icon="ShieldCheck"
-            change={metrics.invalidScans > 0 ? Math.round((metrics.duplicateBlocks / metrics.invalidScans) * 100) : 0}
-            changeLabel="duplicate rejections"
-            isLoading={isRefreshing}
-          />
-        </div>
-      )}
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+        <StatCard
+          title="Total Revenue"
+          value={metrics ? `₹${(metrics.totalRevenue / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}
+          icon="Banknote"
+          change={metrics?.revenueChange}
+          changeLabel="vs yesterday"
+          isLoading={isLoading || isRefreshing}
+        />
+        <StatCard
+          title="Tickets Issued"
+          value={metrics ? metrics.ticketsSold : '—'}
+          icon="Ticket"
+          change={metrics?.todayTickets && metrics.todayTickets > 0 ? 100 : undefined}
+          changeLabel={metrics ? `${metrics.todayTickets} sold today` : undefined}
+          isLoading={isLoading || isRefreshing}
+        />
+        <StatCard
+          title="Successful Gate Scans"
+          value={metrics ? metrics.validEntries : '—'}
+          icon="ScanLine"
+          change={undefined}
+          isLoading={isLoading || isRefreshing}
+        />
+        <StatCard
+          title="Gate Security Alerts"
+          value={metrics ? metrics.invalidScans : '—'}
+          icon="ShieldCheck"
+          change={metrics?.invalidScans && metrics.invalidScans > 0 ? Math.round((metrics.duplicateBlocks / metrics.invalidScans) * 100) : 0}
+          changeLabel="duplicate rejections"
+          isLoading={isLoading || isRefreshing}
+        />
+      </div>
 
       {/* Main Grid Content */}
       <div className="grid gap-6 lg:grid-cols-3">
@@ -346,20 +325,43 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {dashboardData?.exhibitionBreakdown?.map((exh: any) => (
-              <ExhibitionCard
-                key={exh.id}
-                id={exh.id}
-                name={exh.name}
-                venue={exh.venue || 'Exhibition Venue'}
-                startDate={exh.startDate || new Date()}
-                endDate={exh.endDate || new Date()}
-                status={exh.status}
-                ticketTypes={[]}
-                ticketCount={exh.ticketsSold}
-                revenue={exh.revenue}
-              />
-            ))}
+            {isLoading ? (
+              <>
+                <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-4">
+                  <div className="h-5 w-40 skeleton" />
+                  <div className="h-4 w-28 skeleton" />
+                  <div className="border-t border-gray-850" />
+                  <div className="flex justify-between">
+                    <div className="h-4 w-20 skeleton" />
+                    <div className="h-4 w-20 skeleton" />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-4">
+                  <div className="h-5 w-40 skeleton" />
+                  <div className="h-4 w-28 skeleton" />
+                  <div className="border-t border-gray-850" />
+                  <div className="flex justify-between">
+                    <div className="h-4 w-20 skeleton" />
+                    <div className="h-4 w-20 skeleton" />
+                  </div>
+                </div>
+              </>
+            ) : (
+              dashboardData?.exhibitionBreakdown?.map((exh: any) => (
+                <ExhibitionCard
+                  key={exh.id}
+                  id={exh.id}
+                  name={exh.name}
+                  venue={exh.venue || 'Exhibition Venue'}
+                  startDate={exh.startDate || new Date()}
+                  endDate={exh.endDate || new Date()}
+                  status={exh.status}
+                  ticketTypes={[]}
+                  ticketCount={exh.ticketsSold}
+                  revenue={exh.revenue}
+                />
+              ))
+            )}
           </div>
 
           {/* Premium Analytics Charts Container */}
@@ -373,7 +375,19 @@ export default function AdminDashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
-                {metrics && (
+                {isLoading || !metrics ? (
+                  <div className="space-y-6">
+                    <div className="flex justify-between">
+                      <div className="h-4 w-32 skeleton" />
+                      <div className="h-4 w-32 skeleton" />
+                    </div>
+                    <div className="h-4.5 w-full rounded-full skeleton" />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="h-16 skeleton rounded-lg" />
+                      <div className="h-16 skeleton rounded-lg" />
+                    </div>
+                  </div>
+                ) : (
                   <div className="space-y-6">
                     <div className="flex justify-between text-xs font-semibold text-gray-400">
                       <span>UPI Sales Volume ({Math.round(upiPercent)}%)</span>
@@ -422,7 +436,22 @@ export default function AdminDashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
-                {metrics && (
+                {isLoading || !metrics ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="h-3 w-32 skeleton" />
+                      <div className="h-2 w-full rounded-full skeleton" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 w-32 skeleton" />
+                      <div className="h-2 w-full rounded-full skeleton" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 w-32 skeleton" />
+                      <div className="h-2 w-full rounded-full skeleton" />
+                    </div>
+                  </div>
+                ) : (
                   <div className="space-y-4.5">
                     {/* Progress Bar Rows */}
                     <div className="space-y-3.5">
@@ -491,7 +520,26 @@ export default function AdminDashboardPage() {
 
         {/* Right side activity feed */}
         <div className="space-y-5 lg:col-span-1">
-          <ActivityFeed items={feedItems} title="Live Terminal activity feed" />
+          {isLoading ? (
+            <Card className="overflow-hidden">
+              <CardHeader className="py-4 border-b border-gray-850">
+                <div className="h-4 w-40 skeleton" />
+              </CardHeader>
+              <CardContent className="p-4 space-y-4">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="flex gap-3 items-center">
+                    <div className="h-7.5 w-7.5 rounded-lg skeleton shrink-0" />
+                    <div className="space-y-2 flex-1">
+                      <div className="h-3.5 w-5/6 skeleton" />
+                      <div className="h-2.5 w-1/2 skeleton" />
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : (
+            <ActivityFeed items={feedItems} title="Live Terminal activity feed" />
+          )}
         </div>
       </div>
     </ContentWrapper>

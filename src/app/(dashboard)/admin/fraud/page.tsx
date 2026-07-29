@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/providers/toast-provider';
+import { StatCardSkeletonGrid, TableSkeleton } from '@/components/shared/skeletons';
 import Link from 'next/link';
 
 export default function FraudDashboardPage() {
@@ -93,9 +94,9 @@ export default function FraudDashboardPage() {
   if (isLoading) {
     return (
       <ContentWrapper>
-        <div className="flex min-h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-300" />
-        </div>
+        <PageHeader title="Security & Fraud Alerts" description="Real-time gate security updates, duplicate ticket warnings, and suspicious activity alerts." showDivider />
+        <StatCardSkeletonGrid columns={4} />
+        <TableSkeleton rows={6} columns={5} />
       </ContentWrapper>
     );
   }

@@ -11,6 +11,7 @@ import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui/spinner';
+import { TableSkeleton } from '@/components/shared/skeletons';
 import { History, RefreshCw } from 'lucide-react';
 
 export default function GateScanHistoryPage() {
@@ -159,9 +160,8 @@ export default function GateScanHistoryPage() {
   if (authLoading) {
     return (
       <ContentWrapper>
-        <div className="flex h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-500" />
-        </div>
+        <PageHeader title="Gate entrance checks logs" description="Search past validation attempts and inspect duplicate attempt statistics." showDivider />
+        <TableSkeleton rows={6} columns={5} showSearch />
       </ContentWrapper>
     );
   }
@@ -221,9 +221,7 @@ export default function GateScanHistoryPage() {
 
       {/* Log Feed Table */}
       {loading ? (
-        <div className="flex h-[35dvh] items-center justify-center bg-gray-900 border border-gray-800 rounded-xl p-8">
-          <Spinner className="text-accent-500" />
-        </div>
+        <TableSkeleton rows={6} columns={5} />
       ) : scans.length === 0 ? (
         <div className="text-center bg-gray-900 border border-gray-800 rounded-xl p-12">
           <p className="text-gray-400">No ticket entrance scans matching filter criteria found.</p>

@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/components/providers/toast-provider';
+import { StatCardSkeletonGrid, TableSkeleton } from '@/components/shared/skeletons';
 
 type TabType = 'sales' | 'exhibitions' | 'staff' | 'security';
 
@@ -145,9 +146,9 @@ export default function ReportsPage() {
   if (isLoading) {
     return (
       <ContentWrapper>
-        <div className="flex min-h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-300" />
-        </div>
+        <PageHeader title="Executive Operations & Financial Audit Reports" description="Generate, audit, and export consolidated ticket sales, exhibition footfall, and security metrics." showDivider />
+        <StatCardSkeletonGrid columns={4} />
+        <TableSkeleton rows={6} columns={5} showSearch />
       </ContentWrapper>
     );
   }

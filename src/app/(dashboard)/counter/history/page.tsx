@@ -14,6 +14,7 @@ import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui/spinner';
+import { TableSkeleton } from '@/components/shared/skeletons';
 import { Printer, RefreshCw } from 'lucide-react';
 
 interface CancelTransactionButtonProps {
@@ -453,9 +454,8 @@ export default function SalesHistoryPage() {
   if (authLoading) {
     return (
       <ContentWrapper>
-        <div className="flex h-[60dvh] items-center justify-center">
-          <Spinner size="lg" className="text-accent-500" />
-        </div>
+        <PageHeader title="Sales History Logs" description="View past sales transactions and print duplicate receipts." showDivider />
+        <TableSkeleton rows={6} columns={7} showSearch />
       </ContentWrapper>
     );
   }
@@ -552,9 +552,7 @@ export default function SalesHistoryPage() {
 
       {/* History table */}
       {loading ? (
-        <div className="flex h-[30dvh] items-center justify-center bg-gray-900 border border-gray-800 rounded-xl p-8">
-          <Spinner className="text-accent-500" />
-        </div>
+        <TableSkeleton rows={6} columns={7} />
       ) : sales.length === 0 ? (
         <div className="text-center bg-gray-900 border border-gray-800 rounded-xl p-12">
           <p className="text-gray-400">No sale transactions matching filters found.</p>
