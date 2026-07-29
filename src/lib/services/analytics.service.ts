@@ -199,10 +199,12 @@ export class AnalyticsService {
     ]);
 
     const counterUserIds = counterSalesAgg.map((c) => c._id);
-    const counterUsers = await UserModel.find({ _id: { $in: counterUserIds } }).select('name staffId');
+    const counterUsers = await UserModel.find({ _id: { $in: counterUserIds } })
+      .select('name staffId')
+      .lean();
 
     const userMap = new Map<string, string>();
-    counterUsers.forEach((u) => {
+    counterUsers.forEach((u: any) => {
       userMap.set(u._id.toString(), u.name || `Staff ${u.staffId}`);
     });
 
@@ -230,9 +232,11 @@ export class AnalyticsService {
 
     // Populate gate names / operator names if IDs match users
     const gateUserIds = gateLoadAgg.map((g) => g._id).filter((id) => mongoose.Types.ObjectId.isValid(id));
-    const gateUsers = await UserModel.find({ _id: { $in: gateUserIds } }).select('name staffId');
+    const gateUsers = await UserModel.find({ _id: { $in: gateUserIds } })
+      .select('name staffId')
+      .lean();
     const gateUserMap = new Map<string, string>();
-    gateUsers.forEach((u) => {
+    gateUsers.forEach((u: any) => {
       gateUserMap.set(u._id.toString(), u.name || `Gate Operator ${u.staffId}`);
     });
 
@@ -306,9 +310,11 @@ export class AnalyticsService {
       ]);
 
       const exhIds = exhCompAgg.map((e) => e._id);
-      const exhDocs = await ExhibitionModel.find({ _id: { $in: exhIds } }).select('name');
+      const exhDocs = await ExhibitionModel.find({ _id: { $in: exhIds } })
+        .select('name')
+        .lean();
       const exhMap = new Map<string, string>();
-      exhDocs.forEach((e) => exhMap.set(e._id.toString(), e.name));
+      exhDocs.forEach((e: any) => exhMap.set(e._id.toString(), e.name));
 
       exhibitionComparison = exhCompAgg.map((item) => ({
         exhibitionId: item._id?.toString(),

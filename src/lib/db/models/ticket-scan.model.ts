@@ -98,6 +98,8 @@ TicketScanSchema.index({ ticketId: 1, scannedAt: -1 });
 TicketScanSchema.index({ scannedBy: 1, scannedAt: -1 });
 TicketScanSchema.index({ exhibitionId: 1, scannedAt: -1 });
 TicketScanSchema.index({ exhibitionId: 1, result: 1 });
+TicketScanSchema.index({ scannedAt: -1, _id: -1 });
+TicketScanSchema.index({ result: 1, scannedAt: -1 });
 
 if (mongoose.models && mongoose.models.TicketScan) {
   delete (mongoose.models as any).TicketScan;

@@ -480,7 +480,6 @@ export const TicketService = {
       quantity: updatedTicket.quantity,
       usedCount: updatedTicket.usedCount,
       remainingCount: updatedTicket.remainingCount,
-      admittedThisScan: countToAdmit,
     };
   },
 
@@ -496,8 +495,8 @@ export const TicketService = {
     await connectToDatabase();
     const { TicketScan: TicketScanModel } = await import('@/lib/db/models/ticket-scan.model');
 
-    const page = params.page || 1;
-    const limit = params.limit || 20;
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
     const query: Record<string, any> = {};
@@ -522,17 +521,24 @@ export const TicketService = {
 
     const total = await TicketScanModel.countDocuments(query);
     const docs = await TicketScanModel.find(query)
-      .sort({ scannedAt: -1 })
+      .sort({ scannedAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit)
       .populate('ticketId', 'ticketNumber ticketType customerName')
       .populate('exhibitionId', 'name venue')
-      .populate('scannedBy', 'name staffId');
+      .populate('scannedBy', 'name staffId')
+      .lean();
 
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data: docs.map((d) => d.toJSON()),
+      data: docs.map((d: any) => ({
+        ...d,
+        id: d._id.toString(),
+        ticketId: d.ticketId ? { ...d.ticketId, id: d.ticketId._id?.toString() } : undefined,
+        exhibitionId: d.exhibitionId ? { ...d.exhibitionId, id: d.exhibitionId._id?.toString() } : undefined,
+        scannedBy: d.scannedBy ? { ...d.scannedBy, id: d.scannedBy._id?.toString() } : undefined,
+      })),
       pagination: {
         total,
         page,
@@ -555,7 +561,9 @@ export const TicketService = {
       query.scannedAt = { $gte: dateRange.start, $lte: dateRange.end };
     }
 
-    const scans = await TicketScanModel.find(query);
+    const scans = await TicketScanModel.find(query)
+      .select('result admittedCount')
+      .lean();
 
     let admittedCount = 0;
     let totalScans = scans.length;
@@ -576,6 +584,10 @@ export const TicketService = {
     };
   },
 
+  async getById(id: string): Promise<Ticket | null> {
+    return this.findById(id);
+  },
+
   async findById(id: string): Promise<Ticket | null> {
     await connectToDatabase();
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
@@ -584,18 +596,20 @@ export const TicketService = {
       .populate('exhibitionId', 'name venue startDate endDate')
       .populate('soldBy', 'name staffId')
       .populate('usedBy', 'name staffId')
-      .populate('createdBy', 'name staffId');
+      .populate('createdBy', 'name staffId')
+      .lean();
     
-    if (doc) return doc.toJSON() as unknown as Ticket;
+    if (doc) return { ...doc, id: doc._id.toString() } as unknown as Ticket;
 
     // Fallback: Check if it's a ride ticket
     const { RideTicket: RideTicketModel } = await import('@/lib/db/models/ride-ticket.model');
     const rideDoc = await RideTicketModel.findById(id)
       .populate('exhibitionId', 'name venue startDate endDate')
       .populate('rideId', 'name price')
-      .populate('soldBy', 'name staffId');
+      .populate('soldBy', 'name staffId')
+      .lean();
     
-    return rideDoc ? (rideDoc.toJSON() as unknown as any) : null;
+    return rideDoc ? ({ ...rideDoc, id: rideDoc._id.toString() } as unknown as any) : null;
   },
 
   async listByExhibition(
@@ -604,8 +618,8 @@ export const TicketService = {
   ): Promise<{ data: Ticket[]; pagination: PaginationMeta; stats: { totalTickets: number; totalRevenue: number; validCount: number; usedCount: number } }> {
     await connectToDatabase();
 
-    const page = params.page || 1;
-    const limit = params.limit || 20;
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
     const query: Record<string, any> = {};
@@ -646,11 +660,12 @@ export const TicketService = {
 
     const total = await TicketModel.countDocuments(query);
     const docs = await TicketModel.find(query)
-      .sort({ soldAt: -1 })
+      .sort({ soldAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit)
       .populate('exhibitionId', 'name venue')
-      .populate('soldBy', 'name staffId');
+      .populate('soldBy', 'name staffId')
+      .lean();
 
     const totalPages = Math.ceil(total / limit);
 
@@ -664,7 +679,12 @@ export const TicketService = {
     const usedCount = await TicketModel.countDocuments({ ...query, status: 'used' });
 
     return {
-      data: docs.map((d) => d.toJSON() as unknown as Ticket),
+      data: docs.map((d: any) => ({
+        ...d,
+        id: d._id.toString(),
+        exhibitionId: d.exhibitionId ? { ...d.exhibitionId, id: d.exhibitionId._id?.toString() } : undefined,
+        soldBy: d.soldBy ? { ...d.soldBy, id: d.soldBy._id?.toString() } : undefined,
+      }) as unknown as Ticket),
       pagination: {
         total,
         page,
@@ -684,23 +704,28 @@ export const TicketService = {
   async listBySeller(userId: string, params: PaginationParams): Promise<{ data: Ticket[]; pagination: PaginationMeta }> {
     await connectToDatabase();
 
-    const page = params.page || 1;
-    const limit = params.limit || 20;
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
     const query = { soldBy: new mongoose.Types.ObjectId(userId) };
 
     const total = await TicketModel.countDocuments(query);
     const docs = await TicketModel.find(query)
-      .sort({ soldAt: -1 })
+      .sort({ soldAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('exhibitionId', 'name venue');
+      .populate('exhibitionId', 'name venue')
+      .lean();
 
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data: docs.map((d) => d.toJSON() as unknown as Ticket),
+      data: docs.map((d: any) => ({
+        ...d,
+        id: d._id.toString(),
+        exhibitionId: d.exhibitionId ? { ...d.exhibitionId, id: d.exhibitionId._id?.toString() } : undefined,
+      }) as unknown as Ticket),
       pagination: {
         total,
         page,

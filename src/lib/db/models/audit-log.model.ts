@@ -71,8 +71,10 @@ const AuditLogSchema = new Schema<IAuditLog>(
 
 // Indexes
 AuditLogSchema.index({ timestamp: -1 });
+AuditLogSchema.index({ timestamp: -1, _id: -1 });
 AuditLogSchema.index({ performedBy: 1, timestamp: -1 });
 AuditLogSchema.index({ action: 1, timestamp: -1 });
+AuditLogSchema.index({ action: 1, 'details.unauthorizedAttempt': 1, timestamp: -1 });
 AuditLogSchema.index({ targetType: 1, targetId: 1 });
 AuditLogSchema.index({ exhibitionId: 1, timestamp: -1 });
 

@@ -35,20 +35,22 @@ export const FraudService = {
 
     // Get 15 recent suspicious scan incidents
     const suspiciousScans = await TicketScanModel.find({ result: { $ne: 'admitted' } })
-      .sort({ scannedAt: -1 })
+      .sort({ scannedAt: -1, _id: -1 })
       .limit(15)
       .populate('scannedBy', 'name staffId')
       .populate('exhibitionId', 'name')
-      .populate('ticketId', 'ticketNumber');
+      .populate('ticketId', 'ticketNumber')
+      .lean();
 
     // Get 15 recent security violations
     const securityAudits = await AuditLogModel.find({
       action: 'password_reset.requested',
       'details.unauthorizedAttempt': true
     })
-      .sort({ timestamp: -1 })
+      .sort({ timestamp: -1, _id: -1 })
       .limit(15)
-      .populate('performedBy', 'name staffId');
+      .populate('performedBy', 'name staffId')
+      .lean();
 
     const suspiciousIncidents = [
       ...suspiciousScans.map(s => ({

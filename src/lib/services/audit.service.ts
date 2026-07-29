@@ -66,8 +66,8 @@ export const AuditService = {
   }): Promise<{ data: AuditLog[]; pagination: PaginationMeta }> {
     await connectToDatabase();
     
-    const page = params.page || 1;
-    const limit = params.limit || 20;
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
     const query: any = {};
@@ -85,16 +85,22 @@ export const AuditService = {
 
     const total = await AuditLogModel.countDocuments(query);
     const logs = await AuditLogModel.find(query)
-      .sort({ timestamp: -1 })
+      .sort({ timestamp: -1, _id: -1 })
       .skip(skip)
       .limit(limit)
       .populate('performedBy', 'name staffId')
-      .populate('exhibitionId', 'name');
+      .populate('exhibitionId', 'name')
+      .lean();
 
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data: logs.map(l => l.toJSON() as unknown as AuditLog),
+      data: logs.map((l: any) => ({
+        ...l,
+        id: l._id.toString(),
+        performedBy: l.performedBy ? { ...l.performedBy, id: l.performedBy._id?.toString() } : undefined,
+        exhibitionId: l.exhibitionId ? { ...l.exhibitionId, id: l.exhibitionId._id?.toString() } : undefined,
+      }) as unknown as AuditLog),
       pagination: {
         total,
         page,
@@ -111,19 +117,30 @@ export const AuditService = {
       targetType,
       targetId: new mongoose.Types.ObjectId(targetId),
     })
-      .sort({ timestamp: -1 })
-      .populate('performedBy', 'name staffId');
-    return logs.map(l => l.toJSON() as unknown as AuditLog);
+      .sort({ timestamp: -1, _id: -1 })
+      .populate('performedBy', 'name staffId')
+      .lean();
+    return logs.map((l: any) => ({
+      ...l,
+      id: l._id.toString(),
+      performedBy: l.performedBy ? { ...l.performedBy, id: l.performedBy._id?.toString() } : undefined,
+    }) as unknown as AuditLog);
   },
 
   async getByUser(userId: string, limit = 50): Promise<AuditLog[]> {
     await connectToDatabase();
+    const safeLimit = Math.min(Math.max(1, limit), 100);
     const logs = await AuditLogModel.find({
       performedBy: new mongoose.Types.ObjectId(userId),
     })
-      .sort({ timestamp: -1 })
-      .limit(limit)
-      .populate('exhibitionId', 'name');
-    return logs.map(l => l.toJSON() as unknown as AuditLog);
+      .sort({ timestamp: -1, _id: -1 })
+      .limit(safeLimit)
+      .populate('exhibitionId', 'name')
+      .lean();
+    return logs.map((l: any) => ({
+      ...l,
+      id: l._id.toString(),
+      exhibitionId: l.exhibitionId ? { ...l.exhibitionId, id: l.exhibitionId._id?.toString() } : undefined,
+    }) as unknown as AuditLog);
   },
 };

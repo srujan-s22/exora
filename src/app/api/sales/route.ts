@@ -111,9 +111,18 @@ export async function POST(req: NextRequest) {
     const transactionId = result.tickets[0]?.metadata?.transactionId;
     let sale = null;
     if (transactionId) {
-      sale = await SaleModel.findOne({ transactionId })
+      const saleDoc: any = await SaleModel.findOne({ transactionId })
         .populate('exhibitionId', 'name venue')
-        .populate('soldBy', 'name staffId');
+        .populate('soldBy', 'name staffId')
+        .lean();
+      if (saleDoc) {
+        sale = {
+          ...saleDoc,
+          id: saleDoc._id.toString(),
+          exhibitionId: saleDoc.exhibitionId ? { ...saleDoc.exhibitionId, id: saleDoc.exhibitionId._id?.toString() } : undefined,
+          soldBy: saleDoc.soldBy ? { ...saleDoc.soldBy, id: saleDoc.soldBy._id?.toString() } : undefined,
+        };
+      }
     }
 
     return createdResponse({

@@ -20,8 +20,8 @@ export const SaleService = {
   ): Promise<{ data: Sale[]; pagination: PaginationMeta }> {
     await connectToDatabase();
 
-    const page = params.page || 1;
-    const limit = params.limit || 20;
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
     const query: Record<string, any> = {};
@@ -47,16 +47,22 @@ export const SaleService = {
 
     const total = await SaleModel.countDocuments(query);
     const docs = await SaleModel.find(query)
-      .sort({ soldAt: -1 })
+      .sort({ soldAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit)
       .populate('exhibitionId', 'name venue')
-      .populate('soldBy', 'name staffId');
+      .populate('soldBy', 'name staffId')
+      .lean();
 
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data: docs.map((d) => d.toJSON() as unknown as Sale),
+      data: docs.map((d: any) => ({
+        ...d,
+        id: d._id.toString(),
+        exhibitionId: d.exhibitionId ? { ...d.exhibitionId, id: d.exhibitionId._id?.toString() } : undefined,
+        soldBy: d.soldBy ? { ...d.soldBy, id: d.soldBy._id?.toString() } : undefined,
+      }) as unknown as Sale),
       pagination: {
         total,
         page,
@@ -78,7 +84,9 @@ export const SaleService = {
       match.soldAt = { $gte: dateRange.start, $lte: dateRange.end };
     }
 
-    const sales = await SaleModel.find(match);
+    const sales = await SaleModel.find(match)
+      .select('totalAmount ticketCount paymentMethod')
+      .lean();
 
     let totalRevenue = 0;
     let totalTickets = 0;
@@ -121,7 +129,9 @@ export const SaleService = {
       match.soldAt = { $gte: dateRange.start, $lte: dateRange.end };
     }
 
-    const sales = await SaleModel.find(match);
+    const sales = await SaleModel.find(match)
+      .select('totalAmount ticketCount paymentMethod')
+      .lean();
 
     let totalRevenue = 0;
     let totalTickets = 0;

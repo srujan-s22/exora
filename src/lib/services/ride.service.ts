@@ -634,8 +634,8 @@ export const RideService = {
   }): Promise<{ data: RideScan[]; pagination: PaginationMeta }> {
     await connectToDatabase();
 
-    const page = params.page || 1;
-    const limit = params.limit || 20;
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
     const query: Record<string, any> = {};
@@ -647,17 +647,24 @@ export const RideService = {
 
     const total = await RideScanModel.countDocuments(query);
     const docs = await RideScanModel.find(query)
-      .sort({ scannedAt: -1 })
+      .sort({ scannedAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit)
       .populate('ticketId', 'ticketNumber customerName')
       .populate('rideId', 'name price')
-      .populate('scannedBy', 'name staffId');
+      .populate('scannedBy', 'name staffId')
+      .lean();
 
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data: docs.map((d: any) => d.toJSON() as unknown as RideScan),
+      data: docs.map((d: any) => ({
+        ...d,
+        id: d._id.toString(),
+        ticketId: d.ticketId ? { ...d.ticketId, id: d.ticketId._id?.toString() } : undefined,
+        rideId: d.rideId ? { ...d.rideId, id: d.rideId._id?.toString() } : undefined,
+        scannedBy: d.scannedBy ? { ...d.scannedBy, id: d.scannedBy._id?.toString() } : undefined,
+      }) as unknown as RideScan),
       pagination: {
         total,
         page,
@@ -675,8 +682,8 @@ export const RideService = {
   }): Promise<{ data: RideSale[]; pagination: PaginationMeta }> {
     await connectToDatabase();
 
-    const page = params.page || 1;
-    const limit = params.limit || 20;
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
     const query: Record<string, any> = {};
@@ -687,18 +694,25 @@ export const RideService = {
 
     const total = await RideSaleModel.countDocuments(query);
     const docs = await RideSaleModel.find(query)
-      .sort({ soldAt: -1 })
+      .sort({ soldAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit)
       .populate('rideId', 'name price')
       .populate('exhibitionId', 'name venue')
       .populate('soldBy', 'name staffId')
-      .populate('tickets', 'ticketNumber status');
+      .populate('tickets', 'ticketNumber status')
+      .lean();
 
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data: docs.map((d: any) => d.toJSON() as unknown as RideSale),
+      data: docs.map((d: any) => ({
+        ...d,
+        id: d._id.toString(),
+        rideId: d.rideId ? { ...d.rideId, id: d.rideId._id?.toString() } : undefined,
+        exhibitionId: d.exhibitionId ? { ...d.exhibitionId, id: d.exhibitionId._id?.toString() } : undefined,
+        soldBy: d.soldBy ? { ...d.soldBy, id: d.soldBy._id?.toString() } : undefined,
+      }) as unknown as RideSale),
       pagination: {
         total,
         page,
@@ -713,7 +727,7 @@ export const RideService = {
     await connectToDatabase();
     const rideObjectId = new mongoose.Types.ObjectId(rideId);
 
-    const ride = await RideModel.findById(rideId);
+    const ride = await RideModel.findById(rideId).select('name price status').lean();
     if (!ride) throw new Error('Ride not found');
 
     const ticketQuery: Record<string, any> = { rideId: rideObjectId, status: { $ne: 'cancelled' } };
@@ -746,7 +760,9 @@ export const RideService = {
     const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
 
     const totalScans = await RideScanModel.countDocuments(scanQuery);
-    const admittedScans = await RideScanModel.find({ ...scanQuery, result: 'admitted' });
+    const admittedScans = await RideScanModel.find({ ...scanQuery, result: 'admitted' })
+      .select('admittedCount')
+      .lean();
     const admittedCount = admittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
     const rejectedCount = totalScans - admittedScans.length;
 
@@ -767,7 +783,7 @@ export const RideService = {
     await connectToDatabase();
 
     // Find ride assigned to this operator
-    const ride = await RideModel.findOne({ assignedStaff: new mongoose.Types.ObjectId(staffUserId), isActive: true });
+    const ride = await RideModel.findOne({ assignedStaff: new mongoose.Types.ObjectId(staffUserId), isActive: true }).lean();
     if (!ride) return null;
 
     const rideObjectId = ride._id;
@@ -787,7 +803,9 @@ export const RideService = {
     const todayScans = await RideScanModel.find({
       rideId: rideObjectId,
       scannedAt: { $gte: startOfToday, $lte: endOfToday },
-    });
+    })
+      .select('result admittedCount')
+      .lean();
 
     let validCount = 0;
     let invalidCount = 0;
@@ -800,19 +818,27 @@ export const RideService = {
     }
 
     // Recent 10 scans
-    const recentScans = await RideScanModel.find({ rideId: rideObjectId })
-      .sort({ scannedAt: -1 })
+    const recentScansDocs = await RideScanModel.find({ rideId: rideObjectId })
+      .sort({ scannedAt: -1, _id: -1 })
       .limit(10)
       .populate('scannedBy', 'name staffId')
-      .populate('ticketId', 'ticketNumber customerName');
+      .populate('ticketId', 'ticketNumber customerName')
+      .lean();
+
+    const recentScans = recentScansDocs.map((s: any) => ({
+      ...s,
+      id: s._id.toString(),
+      scannedBy: s.scannedBy ? { ...s.scannedBy, id: s.scannedBy._id?.toString() } : undefined,
+      ticketId: s.ticketId ? { ...s.ticketId, id: s.ticketId._id?.toString() } : undefined,
+    }));
 
     return {
-      ride: ride.toJSON() as unknown as Ride,
+      ride: { ...ride, id: ride._id.toString() } as unknown as Ride,
       todayTicketsCount,
       validCount,
       invalidCount,
       totalScansToday: todayScans.length,
-      recentScans: recentScans.map((s: any) => s.toJSON()),
+      recentScans,
     };
   },
 };

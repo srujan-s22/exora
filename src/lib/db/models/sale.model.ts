@@ -142,6 +142,8 @@ const SaleSchema = new Schema<ISale>(
 SaleSchema.index({ exhibitionId: 1, soldAt: -1 });
 SaleSchema.index({ soldBy: 1, soldAt: -1 });
 SaleSchema.index({ exhibitionId: 1, paymentMethod: 1 });
+SaleSchema.index({ soldAt: -1, _id: -1 });
+SaleSchema.index({ status: 1, soldAt: -1 });
 
 export const Sale =
   mongoose.models.Sale || mongoose.model<ISale>('Sale', SaleSchema);

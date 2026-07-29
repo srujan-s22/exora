@@ -178,8 +178,8 @@ export const ExhibitionService = {
   async list(params: PaginationParams & { status?: string; search?: string; category?: string; includeArchived?: boolean }): Promise<{ data: Exhibition[]; pagination: PaginationMeta }> {
     await connectToDatabase();
 
-    const page = params.page || 1;
-    const limit = params.limit || 20;
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
     const query: Record<string, any> = {};
@@ -204,18 +204,21 @@ export const ExhibitionService = {
 
     const total = await ExhibitionModel.countDocuments(query);
     const docs = await ExhibitionModel.find(query)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
     const data = await Promise.all(
-      docs.map(async (doc) => {
-        const stats = await ExhibitionService.getStats(doc._id.toString());
+      docs.map(async (doc: any) => {
+        const docIdStr = doc._id.toString();
+        const stats = await ExhibitionService.getStats(docIdStr);
         return {
-          ...(doc.toJSON() as unknown as Exhibition),
+          ...doc,
+          id: docIdStr,
           ticketCount: stats.ticketsSold,
           revenue: stats.totalRevenue,
-        };
+        } as unknown as Exhibition;
       })
     );
 
@@ -233,18 +236,22 @@ export const ExhibitionService = {
 
   async getActiveExhibitions(): Promise<Exhibition[]> {
     await connectToDatabase();
-    const docs = await ExhibitionModel.find({ status: 'active', archive: { $ne: true } }).sort({ name: 1 });
-    return docs.map((d) => d.toJSON() as unknown as Exhibition);
+    const docs = await ExhibitionModel.find({ status: 'active', archive: { $ne: true } })
+      .sort({ name: 1, _id: 1 })
+      .lean();
+    return docs.map((d: any) => ({ ...d, id: d._id.toString() } as unknown as Exhibition));
   },
 
   async getActiveExhibitionsForStaff(userId: string, userRole: string): Promise<Exhibition[]> {
     await connectToDatabase();
     const query: Record<string, any> = { status: 'active', archive: { $ne: true } };
-    if (userRole !== 'admin') {
+    if (userRole !== 'admin' && userRole !== 'super_admin') {
       query.assignedStaffIds = new mongoose.Types.ObjectId(userId);
     }
-    const docs = await ExhibitionModel.find(query).sort({ name: 1 });
-    return docs.map((d) => d.toJSON() as unknown as Exhibition);
+    const docs = await ExhibitionModel.find(query)
+      .sort({ name: 1, _id: 1 })
+      .lean();
+    return docs.map((d: any) => ({ ...d, id: d._id.toString() } as unknown as Exhibition));
   },
 
   async getStats(id: string): Promise<Record<string, any>> {
@@ -252,11 +259,11 @@ export const ExhibitionService = {
     const exhibitionObjectId = new mongoose.Types.ObjectId(id);
 
     // 1. Total tickets sold count
-    const ticketsSold = await TicketModel.countDocuments({ exhibitionId: exhibitionObjectId });
+    const ticketsSold = await TicketModel.countDocuments({ exhibitionId: exhibitionObjectId, status: { $ne: 'cancelled' } });
 
     // 2. Total revenue sum
     const sales = await SaleModel.aggregate([
-      { $match: { exhibitionId: exhibitionObjectId } },
+      { $match: { exhibitionId: exhibitionObjectId, status: { $ne: 'cancelled' } } },
       { $group: { _id: null, total: { $sum: '$totalAmount' } } },
     ]);
     const totalRevenue = sales.length > 0 ? sales[0].total : 0;
@@ -264,15 +271,17 @@ export const ExhibitionService = {
     // 3. Ticket validation scans processed count
     const totalScans = await TicketScanModel.countDocuments({ exhibitionId: exhibitionObjectId });
 
-    // 4. Admitted visitor count
+    // 4. Admitted visitor count with selective field & lean query
     const admittedScans = await TicketScanModel.find({
       exhibitionId: exhibitionObjectId,
       result: 'admitted',
-    });
+    })
+      .select('admittedCount')
+      .lean();
     const admittedCount = admittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
 
     // 5. Compute capacity utilization
-    const exh = await ExhibitionModel.findById(id);
+    const exh = await ExhibitionModel.findById(id).select('capacity').lean();
     const capacity = exh?.capacity || 0;
     const utilization = capacity > 0 ? (admittedCount / capacity) * 100 : 0;
 
