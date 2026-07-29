@@ -17,6 +17,25 @@ export const AuditService = {
         ...data,
         timestamp: new Date(),
       });
+
+      // Security Note: Structured event severity classification for centralized log aggregators
+      const isSecurityEvent = data.action.includes('failed') || data.action.includes('reset') || data.action.includes('bootstrap') || data.action.includes('cancel');
+      if (isSecurityEvent) {
+        logger.security(`Audit Event: ${data.action}`, {
+          performedBy: data.performedBy,
+          role: data.performedByRole,
+          targetType: data.targetType,
+          targetId: data.targetId,
+          ip: data.ipAddress,
+        });
+      } else {
+        logger.info(`Audit Event: ${data.action}`, {
+          performedBy: data.performedBy,
+          role: data.performedByRole,
+          targetType: data.targetType,
+        });
+      }
+
       return log.toJSON() as unknown as AuditLog;
     } catch (e) {
       logger.error('Failed to write audit log', e);

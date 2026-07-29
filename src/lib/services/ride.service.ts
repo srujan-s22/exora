@@ -746,8 +746,9 @@ export const RideService = {
     const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
 
     const totalScans = await RideScanModel.countDocuments(scanQuery);
-    const admittedCount = await RideScanModel.countDocuments({ ...scanQuery, result: 'admitted' });
-    const rejectedCount = totalScans - admittedCount;
+    const admittedScans = await RideScanModel.find({ ...scanQuery, result: 'admitted' });
+    const admittedCount = admittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
+    const rejectedCount = totalScans - admittedScans.length;
 
     return {
       rideId,
@@ -792,7 +793,7 @@ export const RideService = {
     let invalidCount = 0;
     for (const scan of todayScans) {
       if (scan.result === 'admitted') {
-        validCount++;
+        validCount += scan.admittedCount || 1;
       } else {
         invalidCount++;
       }

@@ -57,7 +57,7 @@ export const DashboardService = {
 
     for (const sc of scans) {
       if (sc.result === 'admitted') {
-        validEntries++;
+        validEntries += sc.admittedCount || 1;
       } else {
         invalidScans++;
         if (sc.result === 'rejected_used') duplicateBlocks++;
@@ -90,7 +90,8 @@ export const DashboardService = {
     }
 
     const todayScans = await TicketScanModel.countDocuments({ scannedAt: { $gte: startOfToday, $lte: endOfToday } });
-    const todayAdmitted = await TicketScanModel.countDocuments({ scannedAt: { $gte: startOfToday, $lte: endOfToday }, result: 'admitted' });
+    const todayAdmittedScans = await TicketScanModel.find({ scannedAt: { $gte: startOfToday, $lte: endOfToday }, result: 'admitted' });
+    const todayAdmitted = todayAdmittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
     const todayFlags = await TicketScanModel.countDocuments({ scannedAt: { $gte: startOfToday, $lte: endOfToday }, result: { $regex: /^rejected_/ } });
 
     // 4. Counts of entities
@@ -105,7 +106,8 @@ export const DashboardService = {
       const soldCount = await TicketModel.countDocuments({ exhibitionId: exh._id, status: { $ne: 'cancelled' } });
       const exhSales = await SaleModel.find({ exhibitionId: exh._id, status: { $ne: 'cancelled' } });
       const rev = exhSales.reduce((acc, curr) => acc + (curr.totalAmount || 0), 0);
-      const admitted = await TicketScanModel.countDocuments({ exhibitionId: exh._id, result: 'admitted' });
+      const exhAdmittedScans = await TicketScanModel.find({ exhibitionId: exh._id, result: 'admitted' });
+      const admitted = exhAdmittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
 
       exhibitionBreakdown.push({
         id: exh._id.toString(),
@@ -234,7 +236,7 @@ export const DashboardService = {
 
     for (const scan of scans) {
       if (scan.result === 'admitted') {
-        admittedCount++;
+        admittedCount += scan.admittedCount || 1;
       } else if (scan.result.startsWith('rejected')) {
         securityFlags++;
       }

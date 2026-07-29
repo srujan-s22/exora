@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       let totalScans = overallScans.length;
       let securityFlags = 0;
       for (const scan of overallScans) {
-        if (scan.result === 'admitted') admittedCount++;
+        if (scan.result === 'admitted') admittedCount += scan.admittedCount || 1;
         else if (scan.result.startsWith('rejected')) securityFlags++;
       }
       stats = { admittedCount, totalScans, securityFlags };

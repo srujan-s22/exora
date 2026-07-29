@@ -32,7 +32,7 @@ export default function AdminCreateTicketsPage() {
   // Form state
   const [exhibitionId, setExhibitionId] = React.useState('');
   const [ticketType, setTicketType] = React.useState('');
-  const [quantity, setQuantity] = React.useState(1);
+  const [quantity, setQuantity] = React.useState<number | ''>('');
   const [paymentMethod, setPaymentMethod] = React.useState('free');
   const [customerName, setCustomerName] = React.useState('');
   const [customerPhone, setCustomerPhone] = React.useState('');
@@ -92,18 +92,25 @@ export default function AdminCreateTicketsPage() {
     return selectedExhibition.ticketTypes.find((t) => t.name === ticketType)?.price || 0;
   }, [selectedExhibition, ticketType]);
 
-  const totalCost = selectedTicketPrice * quantity;
+  const qtyNum = typeof quantity === 'number' ? quantity : 0;
+  const totalCost = selectedTicketPrice * qtyNum;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (quantity === '' || qtyNum < 1 || qtyNum > 100) {
+      setError('Please enter a ticket quantity between 1 and 100.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const payload = {
         exhibitionId,
         ticketType,
-        quantity,
+        quantity: qtyNum,
         paymentMethod,
         ...(customerName && { customerName }),
         ...(customerPhone && { customerPhone }),
@@ -327,8 +334,12 @@ export default function AdminCreateTicketsPage() {
                     type="number"
                     min={1}
                     max={100}
+                    placeholder="Enter quantity"
                     value={quantity}
-                    onChange={(e) => setQuantity(Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setQuantity(val === '' ? '' : Math.min(100, Math.max(1, parseInt(val, 10) || 0)));
+                    }}
                     className="w-full h-10"
                   />
                   <p className="text-[10px] text-gray-500">Max 100 per batch</p>
@@ -437,10 +448,10 @@ export default function AdminCreateTicketsPage() {
               <Button
                 type="submit"
                 isLoading={isSubmitting}
-                disabled={!exhibitionId || !ticketType || quantity < 1}
+                disabled={!exhibitionId || !ticketType || quantity === '' || qtyNum < 1}
                 leftIcon={<Ticket size={16} />}
               >
-                Generate {quantity} Ticket{quantity > 1 ? 's' : ''}
+                Generate {qtyNum > 0 ? `${qtyNum} Ticket${qtyNum > 1 ? 's' : ''}` : 'Tickets'}
               </Button>
             </CardFooter>
           </Card>

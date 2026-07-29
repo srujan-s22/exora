@@ -23,11 +23,25 @@ const SECURITY_HEADERS: Record<string, string> = {
   ].join('; '),
 };
 
-/** Apply security headers to a NextResponse. */
-function withSecurityHeaders(response: NextResponse): NextResponse {
+/**
+ * Apply security headers to a NextResponse.
+ * Security Note: Permissions-Policy restricts camera access to scanner routes only (/gate/scan, /ride/scan)
+ * to prevent unauthorized camera usage while guaranteeing QR scanning works seamlessly.
+ */
+function withSecurityHeaders(response: NextResponse, pathname?: string): NextResponse {
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    if (key === 'Permissions-Policy') continue; // Handled dynamically below
     response.headers.set(key, value);
   }
+
+  // Dynamic Camera Permission Scoping: Only scanner pages require camera access
+  const isScannerRoute = pathname && (pathname.startsWith('/gate/scan') || pathname.startsWith('/ride/scan'));
+  const permissionsPolicy = isScannerRoute
+    ? 'camera=(self), microphone=(), geolocation=()'
+    : 'camera=(), microphone=(), geolocation=()';
+
+  response.headers.set('Permissions-Policy', permissionsPolicy);
+
   // HSTS only in production (requires HTTPS)
   if (process.env.NODE_ENV === 'production') {
     response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
@@ -101,12 +115,12 @@ export function proxy(request: NextRequest) {
   // 2. Public paths — always accessible
   const publicPaths = ['/login', '/setup', '/unauthorized', '/api/auth/login', '/api/health', '/api/bootstrap'];
   if (publicPaths.some((path) => pathname === path || pathname.startsWith(path + '/'))) {
-    return withSecurityHeaders(NextResponse.next());
+    return withSecurityHeaders(NextResponse.next(), pathname);
   }
 
   // 3. API routes — handled by API route level withAuth middleware
   if (pathname.startsWith('/api/')) {
-    return withSecurityHeaders(NextResponse.next());
+    return withSecurityHeaders(NextResponse.next(), pathname);
   }
 
   // 4. Redirect unauthenticated users
@@ -121,7 +135,7 @@ export function proxy(request: NextRequest) {
       }
       return NextResponse.redirect(loginUrl);
     }
-    return withSecurityHeaders(NextResponse.next());
+    return withSecurityHeaders(NextResponse.next(), pathname);
   }
 
   // 5. Decode token and authorize path access
@@ -151,7 +165,7 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  return withSecurityHeaders(NextResponse.next());
+  return withSecurityHeaders(NextResponse.next(), pathname);
 }
 
 export const config = {

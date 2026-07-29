@@ -39,12 +39,18 @@ export function verifyHmac(data: string, signature: string, secret: string): boo
 }
 
 /**
- * Generate a SHA-256 hash of a string.
+ * Generate a SHA-256 hash of a string using QR_HMAC_SECRET salt.
  * Used for creating qrHash for fast ticket lookup.
+ * Security Note: Throws in production if QR_HMAC_SECRET is unconfigured.
  */
 export function sha256(data: string): string {
-  const salt = process.env.QR_HMAC_SECRET || 'exora-hash-salt';
-  return createHmac('sha256', salt).update(data).digest('hex');
+  const salt = process.env.QR_HMAC_SECRET;
+  if (!salt) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SECURITY CONFIGURATION ERROR: QR_HMAC_SECRET is required for hashing.');
+    }
+  }
+  return createHmac('sha256', salt || 'exora-hash-salt').update(data).digest('hex');
 }
 
 /**

@@ -79,14 +79,17 @@ export class AnalyticsService {
     }
 
     // 3. Aggregate Top KPI Cards
-    const [revAgg, visitorsEntered, activeCountersList, todayRevAgg, todayVisitors] = await Promise.all([
+    const [revAgg, visitorsEnteredAgg, activeCountersList, todayRevAgg, todayVisitorsAgg] = await Promise.all([
       // Total Revenue
       SaleModel.aggregate([
         { $match: saleMatch },
         { $group: { _id: null, total: { $sum: '$totalAmount' }, tickets: { $sum: '$ticketCount' } } },
       ]),
       // Visitors Entered
-      TicketScanModel.countDocuments({ ...scanMatch, result: 'admitted' }),
+      TicketScanModel.aggregate([
+        { $match: { ...scanMatch, result: 'admitted' } },
+        { $group: { _id: null, total: { $sum: { $ifNull: ['$admittedCount', 1] } } } },
+      ]),
       // Active Counters
       SaleModel.distinct('soldBy', saleMatch),
       // Today's Sales
@@ -101,16 +104,23 @@ export class AnalyticsService {
         { $group: { _id: null, total: { $sum: '$totalAmount' } } },
       ]),
       // Today's Visitors / Scans
-      TicketScanModel.countDocuments({
-        scannedAt: { $gte: startOfToday, $lte: endOfToday },
-        result: 'admitted',
-        ...(scanMatch.exhibitionId ? { exhibitionId: scanMatch.exhibitionId } : {}),
-      }),
+      TicketScanModel.aggregate([
+        {
+          $match: {
+            scannedAt: { $gte: startOfToday, $lte: endOfToday },
+            result: 'admitted',
+            ...(scanMatch.exhibitionId ? { exhibitionId: scanMatch.exhibitionId } : {}),
+          },
+        },
+        { $group: { _id: null, total: { $sum: { $ifNull: ['$admittedCount', 1] } } } },
+      ]),
     ]);
 
     const totalRevenuePaise = revAgg[0]?.total || 0;
     const totalTicketsSold = revAgg[0]?.tickets || 0;
     const todayRevenuePaise = todayRevAgg[0]?.total || 0;
+    const visitorsEntered = visitorsEnteredAgg[0]?.total || 0;
+    const todayVisitors = todayVisitorsAgg[0]?.total || 0;
 
     const kpis = {
       totalRevenue: Math.round(totalRevenuePaise / 100),
@@ -159,7 +169,7 @@ export class AnalyticsService {
       {
         $group: {
           _id: { $dateToString: { format: '%Y-%m-%d', date: '$scannedAt', timezone: '+05:30' } },
-          entries: { $sum: 1 },
+          entries: { $sum: { $ifNull: ['$admittedCount', 1] } },
         },
       },
       { $sort: { _id: 1 } },
@@ -210,7 +220,7 @@ export class AnalyticsService {
         $group: {
           _id: { $ifNull: ['$gateId', '$scannedBy'] },
           totalScans: { $sum: 1 },
-          admittedScans: { $sum: { $cond: [{ $eq: ['$result', 'admitted'] }, 1, 0] } },
+          admittedScans: { $sum: { $cond: [{ $eq: ['$result', 'admitted'] }, { $ifNull: ['$admittedCount', 1] }, 0] } },
           rejectedScans: { $sum: { $cond: [{ $ne: ['$result', 'admitted'] }, 1, 0] } },
         },
       },

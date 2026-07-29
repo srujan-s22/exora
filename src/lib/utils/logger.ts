@@ -36,6 +36,31 @@ export const logger = {
     } else {
       console.error(`[ERROR] ❌ ${message}`, errorDetails || '', meta ? JSON.stringify(meta, null, 2) : '');
     }
+  },
+  security(message: string, meta?: any) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(JSON.stringify({ level: 'SECURITY', timestamp: new Date().toISOString(), message, ...meta }));
+    } else {
+      console.warn(`[SECURITY] 🛡️ ${message}`, meta ? JSON.stringify(meta, null, 2) : '');
+    }
+  },
+
+  critical(message: string, error?: any, meta?: any) {
+    const errorDetails = error instanceof Error 
+      ? { name: error.name, message: error.message, stack: error.stack } 
+      : error;
+
+    if (process.env.NODE_ENV === 'production') {
+      console.error(JSON.stringify({ 
+        level: 'CRITICAL', 
+        timestamp: new Date().toISOString(), 
+        message, 
+        error: errorDetails, 
+        ...meta 
+      }));
+    } else {
+      console.error(`[CRITICAL] 🚨 ${message}`, errorDetails || '', meta ? JSON.stringify(meta, null, 2) : '');
+    }
   }
 };
 export default logger;

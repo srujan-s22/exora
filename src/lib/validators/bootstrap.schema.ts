@@ -20,12 +20,14 @@ export const bootstrapSetupSchema = z.object({
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password must not exceed 128 characters')
     .regex(/[A-Z]/, 'Must contain an uppercase letter')
     .regex(/[a-z]/, 'Must contain a lowercase letter')
     .regex(/[0-9]/, 'Must contain a number'),
   bootstrapSecret: z
     .string()
-    .min(1, 'Bootstrap secret is required'),
+    .min(1, 'Bootstrap secret is required')
+    .max(256, 'Bootstrap secret must not exceed 256 characters'),
 });
 
 export type BootstrapSetupInput = z.infer<typeof bootstrapSetupSchema>;

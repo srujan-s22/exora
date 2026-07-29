@@ -34,9 +34,16 @@ export const AuthService = {
 
     const staffId = credentials.staffId.trim().toUpperCase();
 
-    // 1. Find user by staffId, explicitly selecting passwordHash since it is hidden by default
-    const userDoc = await UserModel.findOne({ staffId }).select('+passwordHash');
+    // Field Projection: select only fields required for authentication & token generation
+    const userDoc = await UserModel.findOne({ staffId })
+      .select('staffId name role permissions isActive assignedExhibitions +passwordHash');
+
+    // Security Note: Constant-time authentication mitigation.
+    // If the staff ID does not exist, run a dummy bcrypt comparison so the execution duration
+    // is consistent (~100ms) regardless of whether the staff ID exists, preventing staff ID enumeration.
     if (!userDoc) {
+      const DUMMY_BCRYPT_HASH = '$2a$10$e8W/65dC65X7Z8.45K8/S.u85dJ65X7Z8.45K8/S.u85dJ65X7Z8.';
+      await comparePassword(credentials.password, DUMMY_BCRYPT_HASH);
       throw new Error('Invalid Staff ID or password');
     }
 
@@ -48,14 +55,14 @@ export const AuthService = {
     // 3. Compare password hash
     const isPasswordMatch = await comparePassword(credentials.password, userDoc.passwordHash);
     if (!isPasswordMatch) {
-      // Create failure audit log
+      // Create failure audit log with SECURITY classification context
       await AuditService.create({
         action: 'user.login_failed',
         performedBy: userDoc._id.toString(),
         performedByRole: userDoc.role,
         targetType: 'user',
         targetId: userDoc._id.toString(),
-        details: { reason: 'Incorrect password', staffId },
+        details: { reason: 'Incorrect password', staffId, severity: 'SECURITY' },
         ipAddress,
         userAgent,
       });

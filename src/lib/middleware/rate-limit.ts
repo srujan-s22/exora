@@ -34,27 +34,33 @@ function cleanupExpiredEntries() {
 interface RateLimitOptions {
   windowMs?: number;
   maxRequests?: number;
+  keyPrefix?: string;
   keyGenerator?: (req: NextRequest) => string;
 }
 
 /**
  * Rate limiting middleware.
  * Default: 5 requests per 15 minutes per key.
+ * Security Note: Default key generator prefixes IP with keyPrefix or request pathname
+ * to prevent key collisions across distinct API endpoints.
  */
 export function withRateLimit(
   options: RateLimitOptions,
-  handler: (req: NextRequest, context?: unknown) => Promise<Response>
+  handler: (req: NextRequest, context?: any) => Promise<Response>
 ) {
   const {
     windowMs = 900000, // 15 minutes
     maxRequests = 5,
+    keyPrefix,
     keyGenerator = (req) => {
-      const forwarded = req.headers.get('x-forwarded-for');
-      return forwarded?.split(',')[0]?.trim() || 'unknown';
+      const forwarded = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip');
+      const ip = forwarded?.split(',')[0]?.trim() || 'unknown';
+      const prefix = keyPrefix || req.nextUrl?.pathname || 'global';
+      return `${prefix}:${ip}`;
     },
   } = options;
 
-  return async (req: NextRequest, context?: unknown): Promise<Response> => {
+  return async (req: NextRequest, context?: any): Promise<Response> => {
     cleanupExpiredEntries();
     const key = keyGenerator(req);
     const now = Date.now();

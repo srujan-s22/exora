@@ -56,12 +56,21 @@ export async function GET(req: NextRequest) {
   }
 }
 
+import { withRateLimit } from '@/lib/middleware/rate-limit';
+
 /**
  * POST /api/password-resets
  * Create a new password reset request.
  * Admin with canResetPasswords or super admin.
+ * Security Note: Rate limited to 5 requests per 15 minutes per IP to prevent spamming reset requests.
  */
-export async function POST(req: NextRequest) {
+export const POST = withRateLimit(
+  {
+    windowMs: 900000, // 15 minutes
+    maxRequests: 5,
+    keyPrefix: 'password-reset-create',
+  },
+  async (req: NextRequest) => {
   let targetPhoneNumber: string | undefined;
   let currentUser: any;
   try {
@@ -145,3 +154,4 @@ export async function POST(req: NextRequest) {
     return errorResponse('INTERNAL_ERROR', safeErrorMessage(error, 'Failed to create reset request'), 500);
   }
 }
+);

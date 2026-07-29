@@ -563,7 +563,7 @@ export const TicketService = {
 
     for (const scan of scans) {
       if (scan.result === 'admitted') {
-        admittedCount++;
+        admittedCount += scan.admittedCount || 1;
       } else if (scan.result.startsWith('rejected')) {
         securityFlags++;
       }

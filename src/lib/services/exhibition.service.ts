@@ -265,10 +265,11 @@ export const ExhibitionService = {
     const totalScans = await TicketScanModel.countDocuments({ exhibitionId: exhibitionObjectId });
 
     // 4. Admitted visitor count
-    const admittedCount = await TicketScanModel.countDocuments({
+    const admittedScans = await TicketScanModel.find({
       exhibitionId: exhibitionObjectId,
       result: 'admitted',
     });
+    const admittedCount = admittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
 
     // 5. Compute capacity utilization
     const exh = await ExhibitionModel.findById(id);

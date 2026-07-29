@@ -27,7 +27,7 @@ export default function SellTicketsPage() {
   // Form State
   const [selectedExhId, setSelectedExhId] = React.useState('');
   const [ticketType, setTicketType] = React.useState('');
-  const [quantity, setQuantity] = React.useState(1);
+  const [quantity, setQuantity] = React.useState<number | ''>('');
   const [paymentMethod, setPaymentMethod] = React.useState<'cash' | 'upi'>('cash');
   const [customerName, setCustomerName] = React.useState('');
   const [customerPhone, setCustomerPhone] = React.useState('');
@@ -90,7 +90,8 @@ export default function SellTicketsPage() {
   // Calculate pricing
   const activeExhibition = activeExhibitions.find((e) => e.id === selectedExhId);
   const activeType = activeExhibition?.ticketTypes?.find((t: any) => t.name === ticketType);
-  const totalCost = activeType ? activeType.price * quantity : 0; // in paise
+  const qtyNum = typeof quantity === 'number' ? quantity : 0;
+  const totalCost = activeType ? activeType.price * qtyNum : 0; // in paise
 
   // Change Calculation
   const totalCostInRupees = totalCost / 100;
@@ -107,8 +108,8 @@ export default function SellTicketsPage() {
       addToast({ type: 'warning', title: 'Selection Required', message: 'Please select a ticket class.' });
       return;
     }
-    if (quantity < 1 || quantity > 50) {
-      addToast({ type: 'warning', title: 'Invalid Quantity', message: 'Quantity must be between 1 and 50.' });
+    if (quantity === '' || qtyNum < 1 || qtyNum > 50) {
+      addToast({ type: 'warning', title: 'Invalid Quantity', message: 'Please enter a ticket quantity between 1 and 50.' });
       return;
     }
 
@@ -142,7 +143,7 @@ export default function SellTicketsPage() {
       const payload = {
         exhibitionId: selectedExhId,
         ticketType,
-        quantity,
+        quantity: qtyNum,
         paymentMethod,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
@@ -168,7 +169,7 @@ export default function SellTicketsPage() {
         addToast({
           type: 'success',
           title: 'Sale Processed Successfully',
-          message: `Issued ${quantity} ticket(s) - Total: ₹${totalCostInRupees}`,
+          message: `Issued ${qtyNum} ticket(s) - Total: ₹${totalCostInRupees}`,
         });
 
         // Reset inputs
@@ -177,7 +178,7 @@ export default function SellTicketsPage() {
         setUpiTransactionRef('');
         setCashReceived('');
         setNotes('');
-        setQuantity(1);
+        setQuantity('');
       } else {
         addToast({
           type: 'error',
@@ -271,8 +272,12 @@ export default function SellTicketsPage() {
                     type="number"
                     min={1}
                     max={50}
+                    placeholder="Qty"
                     value={quantity}
-                    onChange={(e) => setQuantity(Number(e.target.value))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setQuantity(val === '' ? '' : parseInt(val, 10));
+                    }}
                     disabled={isSubmitting}
                   />
                 </div>

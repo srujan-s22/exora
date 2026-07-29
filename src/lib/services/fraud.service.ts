@@ -17,7 +17,8 @@ export const FraudService = {
     await connectToDatabase();
 
     const totalScans = await TicketScanModel.countDocuments({});
-    const validScans = await TicketScanModel.countDocuments({ result: 'admitted' });
+    const admittedScans = await TicketScanModel.find({ result: 'admitted' });
+    const validScans = admittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
     const duplicateScans = await TicketScanModel.countDocuments({ result: 'rejected_used' });
     const wrongExhibitionScans = await TicketScanModel.countDocuments({ result: 'rejected_wrong_exhibition' });
     const forgedAttempts = await TicketScanModel.countDocuments({ result: 'rejected_unknown' });

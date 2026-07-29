@@ -33,7 +33,7 @@ export default function CounterRidesPOSPage() {
   const [selectedRide, setSelectedRide] = React.useState<Ride | null>(null);
 
   // POS Form States (when a ride is selected)
-  const [quantity, setQuantity] = React.useState(1);
+  const [quantity, setQuantity] = React.useState<number | ''>('');
   const [paymentMethod, setPaymentMethod] = React.useState<'cash' | 'upi'>('cash');
   const [customerName, setCustomerName] = React.useState('');
   const [customerPhone, setCustomerPhone] = React.useState('');
@@ -108,7 +108,8 @@ export default function CounterRidesPOSPage() {
 
   // Pricing calculations
   const unitPrice = selectedRide ? selectedRide.price : 0;
-  const totalCost = unitPrice * quantity; // in paise
+  const qtyNum = typeof quantity === 'number' ? quantity : 0;
+  const totalCost = unitPrice * qtyNum; // in paise
   const totalCostInRupees = totalCost / 100;
   
   // Cash Change calculations
@@ -118,8 +119,8 @@ export default function CounterRidesPOSPage() {
   const handlePOSSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRide) return;
-    if (quantity < 1 || quantity > 50) {
-      addToast({ type: 'warning', title: 'Invalid Quantity', message: 'Quantity must be between 1 and 50.' });
+    if (quantity === '' || qtyNum < 1 || qtyNum > 50) {
+      addToast({ type: 'warning', title: 'Invalid Quantity', message: 'Please enter a ticket quantity between 1 and 50.' });
       return;
     }
 
@@ -151,7 +152,7 @@ export default function CounterRidesPOSPage() {
       const payload = {
         exhibitionId: selectedExhId,
         rideId: selectedRide.id,
-        quantity,
+        quantity: qtyNum,
         paymentMethod,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
@@ -177,7 +178,7 @@ export default function CounterRidesPOSPage() {
         addToast({
           type: 'success',
           title: 'Ticket(s) Issued',
-          message: `Sold ${quantity} ticket(s) for '${selectedRide.name}' - Total: ₹${totalCostInRupees}`,
+          message: `Sold ${qtyNum} ticket(s) for '${selectedRide.name}' - Total: ₹${totalCostInRupees}`,
         });
 
         // Reset POS Form
@@ -187,7 +188,7 @@ export default function CounterRidesPOSPage() {
         setUpiTransactionRef('');
         setCashReceived('');
         setNotes('');
-        setQuantity(1);
+        setQuantity('');
       } else {
         addToast({
           type: 'error',
@@ -337,8 +338,12 @@ export default function CounterRidesPOSPage() {
                     type="number"
                     min={1}
                     max={50}
+                    placeholder="Enter quantity"
                     value={quantity}
-                    onChange={(e) => setQuantity(Number(e.target.value))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setQuantity(val === '' ? '' : parseInt(val, 10));
+                    }}
                     disabled={isSubmitting}
                   />
 

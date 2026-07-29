@@ -40,6 +40,8 @@ export function paginatedResponse<T>(
 
 /**
  * Create a standardized error response.
+ * Security Note: Ensures uniform error format across all API routes to avoid exposing raw stack traces,
+ * database query internals, or inconsistent error shapes that assist fingerprinting.
  */
 export function errorResponse(
   code: string,

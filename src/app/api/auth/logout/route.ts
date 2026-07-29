@@ -4,15 +4,19 @@ import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 
 export async function POST() {
   const cookieStore = await cookies();
-  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
-  // Only authenticated users can trigger logout
-  if (!token) {
-    return errorResponse('UNAUTHORIZED', 'No active session to log out', 401);
-  }
+  // Security Note: Unconditionally purge authentication cookie with explicit security flags
+  // to ensure invalid/expired tokens are cleanly destroyed on client browsers.
+  cookieStore.set({
+    name: AUTH_COOKIE_NAME,
+    value: '',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 0,
+    expires: new Date(0),
+    path: '/',
+  });
 
-  // Clear HTTP-only authentication cookie
-  cookieStore.delete(AUTH_COOKIE_NAME);
-
-  return successResponse({ success: true });
+  return successResponse({ success: true, message: 'Logged out successfully' });
 }
