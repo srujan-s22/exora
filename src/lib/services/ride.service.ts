@@ -310,21 +310,38 @@ export const RideService = {
 
     const exhibitionId = data.exhibitionId;
 
-    // ── Duplicate Scan Suppression (2-second window) ──
-    const cooldownWindow = new Date(Date.now() - 2000);
+    // ── Request Idempotency Check ──
+    if (data.requestId) {
+      const existingReqScan = await RideScanModel.findOne({ requestId: data.requestId })
+        .populate('ticketId')
+        .lean();
+      if (existingReqScan) {
+        const tDoc: any = existingReqScan.ticketId;
+        return {
+          valid: existingReqScan.result === 'admitted',
+          result: existingReqScan.result,
+          ticket: tDoc ? ({ ...tDoc, id: tDoc._id?.toString() } as unknown as RideTicket) : undefined,
+          ride: ride.toJSON() as unknown as Ride,
+          message: existingReqScan.reason || (existingReqScan.result === 'admitted' ? 'Ride scan processed successfully.' : 'Ride scan rejected.'),
+        };
+      }
+    }
+
+    // ── Duplicate Scan Suppression (3-second window) ──
+    const cooldownWindow = new Date(Date.now() - 3000);
     const existingRecentScan = await RideScanModel.findOne({
       qrPayloadRaw: qrPayload,
       rideId: ride._id,
       scannedAt: { $gte: cooldownWindow },
-    }).sort({ scannedAt: -1 });
+    }).sort({ scannedAt: -1, _id: -1 });
 
     if (existingRecentScan) {
       let ticketObj: RideTicket | undefined = undefined;
       const parsed = parseRideQrPayload(qrPayload, secret);
       if (parsed && mongoose.Types.ObjectId.isValid(parsed.ticketId)) {
-        const ticketDoc = await RideTicketModel.findById(parsed.ticketId);
+        const ticketDoc = await RideTicketModel.findById(parsed.ticketId).lean();
         if (ticketDoc) {
-          ticketObj = ticketDoc.toJSON() as unknown as RideTicket;
+          ticketObj = { ...ticketDoc, id: ticketDoc._id.toString() } as unknown as RideTicket;
         }
       }
 
@@ -357,6 +374,7 @@ export const RideService = {
         qrPayloadRaw: qrPayload,
         reason: 'HMAC signature verification failed. Forgery suspected.',
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -380,6 +398,7 @@ export const RideService = {
         qrPayloadRaw: qrPayload,
         reason: 'Invalid ticket ID format in QR.',
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -401,6 +420,7 @@ export const RideService = {
         qrPayloadRaw: qrPayload,
         reason: 'Ride ticket record not found in database.',
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -423,6 +443,7 @@ export const RideService = {
         qrPayloadRaw: qrPayload,
         reason: `Wrong Exhibition. Ticket exhibition: ${ticket.exhibitionId}. Scanner exhibition: ${exhibitionId}`,
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -448,6 +469,7 @@ export const RideService = {
         qrPayloadRaw: qrPayload,
         reason: `Wrong Ride. Ticket is for: ${ticketRideName} (${ticket.rideId}). Scanner is for: ${ride.name} (${ride._id})`,
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -471,6 +493,7 @@ export const RideService = {
         qrPayloadRaw: qrPayload,
         reason: `Ride '${ride.name}' is closed.`,
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -494,6 +517,7 @@ export const RideService = {
         qrPayloadRaw: qrPayload,
         reason: 'Ride ticket is cancelled.',
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -520,6 +544,7 @@ export const RideService = {
         qrPayloadRaw: qrPayload,
         reason: 'Ride ticket bundle already completed. All entries used.',
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -592,6 +617,7 @@ export const RideService = {
       previousRemainingCount: prevRemaining,
       newRemainingCount: newRemaining,
       gateId: data.gateId,
+      requestId: data.requestId,
     });
 
     await AuditService.create({

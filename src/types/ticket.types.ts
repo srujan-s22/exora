@@ -46,6 +46,7 @@ export interface ValidateTicketInput {
   exhibitionId: string;
   gateId?: string;
   countToAdmit?: number;
+  requestId?: string;
 }
 
 export interface TicketValidationResult {

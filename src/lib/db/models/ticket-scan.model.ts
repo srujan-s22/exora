@@ -18,6 +18,7 @@ export interface ITicketScan extends Document {
   newRemainingCount?: number;
   deviceInfo?: string;
   gateId?: string;
+  requestId?: string;
   location?: {
     lat: number;
     lng: number;
@@ -67,6 +68,7 @@ const TicketScanSchema = new Schema<ITicketScan>(
     ticketStatusAfter: String,
     deviceInfo: String,
     gateId: String,
+    requestId: String,
     location: {
       type: new Schema(
         {
@@ -100,6 +102,7 @@ TicketScanSchema.index({ exhibitionId: 1, scannedAt: -1 });
 TicketScanSchema.index({ exhibitionId: 1, result: 1 });
 TicketScanSchema.index({ scannedAt: -1, _id: -1 });
 TicketScanSchema.index({ result: 1, scannedAt: -1 });
+TicketScanSchema.index({ requestId: 1 }, { sparse: true });
 
 if (mongoose.models && mongoose.models.TicketScan) {
   delete (mongoose.models as any).TicketScan;

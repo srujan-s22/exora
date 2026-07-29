@@ -185,7 +185,7 @@ export function Topbar() {
 
           {/* Notifications Dropdown Panel */}
           {isOpen && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl border border-gray-800 bg-gray-900 shadow-2xl z-50 overflow-hidden flex flex-col max-h-[480px] animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-2 w-auto sm:w-96 max-w-[calc(100vw-1.5rem)] rounded-xl border border-gray-800 bg-gray-900 shadow-2xl z-50 overflow-hidden flex flex-col max-h-[80vh] sm:max-h-[480px] animate-in fade-in slide-in-from-top-2 duration-150">
               {/* Header */}
               <div className="p-3.5 border-b border-gray-800 flex items-center justify-between bg-gray-950/60">
                 <div className="flex items-center gap-2">

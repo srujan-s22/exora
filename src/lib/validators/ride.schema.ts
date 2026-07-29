@@ -39,6 +39,7 @@ export const validateRideTicketSchema = z.object({
   rideId: z.string().min(1, 'Ride ID is required'),
   gateId: z.string().optional(),
   countToAdmit: z.number().int().min(1).optional(),
+  requestId: z.string().optional(),
 });
 
 export type CreateRideInput = z.infer<typeof createRideSchema>;

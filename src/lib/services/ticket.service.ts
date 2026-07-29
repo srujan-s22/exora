@@ -182,62 +182,116 @@ export const TicketService = {
 
     const { TicketScan: TicketScanModel } = await import('@/lib/db/models/ticket-scan.model');
 
-    // ── Duplicate Scan Suppression (2-second window) ──
-    const cooldownWindow = new Date(Date.now() - 2000);
+    // ── Request Idempotency Check ──
+    if (data.requestId) {
+      const existingReqScan = await TicketScanModel.findOne({ requestId: data.requestId })
+        .populate('ticketId')
+        .lean();
+      if (existingReqScan) {
+        const tDoc: any = existingReqScan.ticketId;
+        const totalQty = existingReqScan.previousRemainingCount !== undefined
+          ? (existingReqScan.previousUsedCount || 0) + (existingReqScan.previousRemainingCount || 0)
+          : (tDoc?.quantity || 1);
+        const remCount = existingReqScan.newRemainingCount ?? tDoc?.remainingCount ?? 0;
+        const uCount = existingReqScan.newUsedCount ?? tDoc?.usedCount ?? 0;
+
+        return {
+          valid: existingReqScan.result === 'admitted',
+          result: existingReqScan.result as any,
+          ticket: tDoc ? ({ ...tDoc, id: tDoc._id?.toString() } as unknown as Ticket) : undefined,
+          message: existingReqScan.reason || (existingReqScan.result === 'admitted' ? 'Scan processed successfully.' : 'Scan rejected.'),
+          quantity: totalQty,
+          usedCount: uCount,
+          remainingCount: remCount,
+        };
+      }
+    }
+
+    // ── Duplicate Scan Suppression (3-second window) ──
+    const cooldownWindow = new Date(Date.now() - 3000);
     const existingRecentScan = await TicketScanModel.findOne({
       qrPayloadRaw: qrPayload,
       exhibitionId: data.exhibitionId,
       scannedAt: { $gte: cooldownWindow },
-    }).sort({ scannedAt: -1 });
+    }).sort({ scannedAt: -1, _id: -1 });
 
     if (existingRecentScan) {
       let ticketObj: Ticket | undefined = undefined;
       const parsedPayload = parseQrPayload(qrPayload, secret);
       if (parsedPayload && parsedPayload.ticketId && mongoose.Types.ObjectId.isValid(parsedPayload.ticketId)) {
-        const doc = await TicketModel.findById(parsedPayload.ticketId);
-        if (doc) ticketObj = doc.toJSON() as unknown as Ticket;
+        const doc = await TicketModel.findById(parsedPayload.ticketId).lean();
+        if (doc) ticketObj = { ...doc, id: doc._id.toString() } as unknown as Ticket;
       }
 
+      const isAdmitted = existingRecentScan.result === 'admitted';
+      let message = 'Scan ignored (duplicate scan within cooldown).';
+      if (existingRecentScan.result === 'admitted') message = 'Access Granted. Welcome!';
+      else if (existingRecentScan.result === 'rejected_used') message = 'Duplicate ticket: Already used.';
+      else if (existingRecentScan.reason) message = existingRecentScan.reason;
+
+      const totalQty = ticketObj?.quantity || 1;
+      const uCount = ticketObj?.usedCount || (isAdmitted ? 1 : 0);
+      const remCount = ticketObj?.remainingCount ?? (totalQty - uCount);
+
       return {
-        valid: existingRecentScan.result === 'admitted',
+        valid: isAdmitted,
         result: existingRecentScan.result as any,
         ticket: ticketObj,
-        message: existingRecentScan.result === 'admitted'
-          ? `Admitted recently (${existingRecentScan.reason || 'Entry granted'}).`
-          : existingRecentScan.reason || 'Duplicate scan within cooldown window.',
+        message,
+        quantity: totalQty,
+        usedCount: uCount,
+        remainingCount: remCount,
       };
     }
 
-    // 1. Fetch Staff User
-    const staffUser = await UserModel.findById(gateStaffId);
+    // Fetch Staff Member
+    const staffUser = await UserModel.findById(gateStaffId).select('role').lean();
 
-    // 2. Parse Cryptographic HMAC QR Payload
-    const payloadData = parseQrPayload(qrPayload, secret);
-    if (!payloadData || !payloadData.ticketId || !mongoose.Types.ObjectId.isValid(payloadData.ticketId)) {
-      const qrHash = sha256(qrPayload);
-      const ticketByHash = await TicketModel.findOne({ qrHash });
+    // 1. Verify HMAC Signature
+    const parsedPayload = parseQrPayload(qrPayload, secret);
 
+    if (!parsedPayload) {
       await TicketScanModel.create({
-        ticketId: ticketByHash ? ticketByHash._id : undefined,
         exhibitionId: new mongoose.Types.ObjectId(data.exhibitionId),
         scannedBy: new mongoose.Types.ObjectId(gateStaffId),
         scannedAt: new Date(),
         result: 'rejected_unknown',
         qrPayloadRaw: qrPayload,
-        reason: 'Cryptographic signature is invalid or payload has been tampered with.',
+        reason: 'HMAC signature verification failed. Ticket signature is invalid.',
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
         valid: false,
         result: 'rejected_unknown',
-        ticket: ticketByHash ? (ticketByHash.toJSON() as unknown as Ticket) : undefined,
-        message: 'Invalid or forged QR code. Cryptographic verification failed.',
+        message: 'Invalid ticket payload. Decryption or signature check failed.',
       };
     }
 
-    // 3. Fetch Ticket Bundle document from MongoDB
-    const ticket = await TicketModel.findById(payloadData.ticketId);
+    const { ticketId } = parsedPayload;
+
+    // 2. Fetch the Ticket Record
+    if (!mongoose.Types.ObjectId.isValid(ticketId)) {
+      await TicketScanModel.create({
+        exhibitionId: new mongoose.Types.ObjectId(data.exhibitionId),
+        scannedBy: new mongoose.Types.ObjectId(gateStaffId),
+        scannedAt: new Date(),
+        result: 'rejected_invalid',
+        qrPayloadRaw: qrPayload,
+        reason: 'Invalid ticket ID in QR payload.',
+        gateId: data.gateId,
+        requestId: data.requestId,
+      });
+
+      return {
+        valid: false,
+        result: 'rejected_invalid',
+        message: 'Ticket verification failed: Invalid ticket reference.',
+      };
+    }
+
+    const ticket = await TicketModel.findById(ticketId);
     if (!ticket) {
       await TicketScanModel.create({
         exhibitionId: new mongoose.Types.ObjectId(data.exhibitionId),
@@ -247,6 +301,7 @@ export const TicketService = {
         qrPayloadRaw: qrPayload,
         reason: 'Ticket record not found in database.',
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -271,6 +326,7 @@ export const TicketService = {
         ticketStatusBefore,
         ticketStatusAfter: ticketStatusBefore,
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -295,6 +351,7 @@ export const TicketService = {
         ticketStatusBefore,
         ticketStatusAfter: ticketStatusBefore,
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -318,6 +375,7 @@ export const TicketService = {
         ticketStatusBefore,
         ticketStatusAfter: ticketStatusBefore,
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -340,6 +398,7 @@ export const TicketService = {
         ticketStatusBefore,
         ticketStatusAfter: ticketStatusBefore,
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -367,6 +426,7 @@ export const TicketService = {
         ticketStatusBefore,
         ticketStatusAfter: 'used',
         gateId: data.gateId,
+        requestId: data.requestId,
       });
 
       return {
@@ -447,6 +507,7 @@ export const TicketService = {
       previousRemainingCount: prevRemaining,
       newRemainingCount: newRemaining,
       gateId: data.gateId,
+      requestId: data.requestId,
     });
 
     // Write to AuditLogs

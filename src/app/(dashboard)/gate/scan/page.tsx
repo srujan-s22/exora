@@ -81,6 +81,7 @@ export default function GateScanPage() {
     setIsProcessing(true);
     const payloadToSend = isFake ? 'tampered-fake-signature-token-payload' : payload;
     setLastScannedPayload(payloadToSend);
+    const requestId = 'gate_req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
 
     try {
       const res = await fetch('/api/tickets/validate', {
@@ -91,6 +92,7 @@ export default function GateScanPage() {
           exhibitionId: selectedExhId,
           gateId: 'fullscreen-terminal',
           countToAdmit,
+          requestId,
         }),
       });
 

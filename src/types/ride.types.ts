@@ -97,6 +97,8 @@ export interface ValidateRideTicketInput {
   exhibitionId: string;
   rideId: string;
   gateId?: string;
+  countToAdmit?: number;
+  requestId?: string;
 }
 
 export interface RideTicketValidationResult {

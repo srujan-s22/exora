@@ -15,6 +15,7 @@ export interface IRideScan extends Document {
   previousRemainingCount?: number;
   newRemainingCount?: number;
   gateId?: string;
+  requestId?: string;
 }
 
 const RideScanSchema = new Schema<IRideScan>(
@@ -62,6 +63,7 @@ const RideScanSchema = new Schema<IRideScan>(
     },
     reason: String,
     gateId: String,
+    requestId: String,
   },
   {
     timestamps: false,
@@ -84,6 +86,7 @@ RideScanSchema.index({ ticketId: 1, scannedAt: -1 });
 RideScanSchema.index({ rideId: 1, scannedAt: -1 });
 RideScanSchema.index({ scannedBy: 1, scannedAt: -1 });
 RideScanSchema.index({ exhibitionId: 1, scannedAt: -1 });
+RideScanSchema.index({ requestId: 1 }, { sparse: true });
 
 if (mongoose.models && mongoose.models.RideScan) {
   delete (mongoose.models as any).RideScan;
