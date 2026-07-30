@@ -118,7 +118,7 @@ const SystemSettingsSchema = new Schema<ISystemSettings>(
       type: String,
       required: true,
       trim: true,
-      default: 'support@exora.com',
+      default: 'platform.exora@gmail.com',
     },
     defaultTicketValidity: {
       type: Number,

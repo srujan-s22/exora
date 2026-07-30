@@ -44,7 +44,7 @@ export default function SettingsPage() {
   // System Settings Form State
   const [systemForm, setSystemForm] = React.useState({
     siteTitle: 'EXORA',
-    supportEmail: 'support@exora.com',
+    supportEmail: 'platform.exora@gmail.com',
     defaultTicketValidity: 24,
     ticketPrefix: 'EXH',
     maxScansPerTicket: 1,

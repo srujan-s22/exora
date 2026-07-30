@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       // Create defaults
       settings = await SystemSettings.create({
         siteTitle: 'EXORA',
-        supportEmail: 'support@exora.com',
+        supportEmail: 'platform.exora@gmail.com',
         defaultTicketValidity: 24,
         ticketPrefix: 'EXH',
         maxScansPerTicket: 1,
@@ -116,7 +116,7 @@ export async function PATCH(req: NextRequest) {
     if (!settings) {
       settings = new SystemSettings({
         siteTitle: 'EXORA',
-        supportEmail: 'support@exora.com',
+        supportEmail: 'platform.exora@gmail.com',
         defaultTicketValidity: 24,
         ticketPrefix: 'EXH',
         maxScansPerTicket: 1,
