@@ -4,6 +4,7 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { ToastProvider } from '@/components/providers/toast-provider';
 import { AuthProvider } from '@/components/providers/auth-provider';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 
 const inter = Inter({
@@ -94,6 +95,7 @@ export default function RootLayout({
             <ToastProvider>
               {children}
               <SpeedInsights />
+              <Analytics />
             </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
