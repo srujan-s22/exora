@@ -3,6 +3,7 @@
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { MobileNav } from '@/components/layout/mobile-nav';
+import { Footer } from '@/components/layout/footer';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -42,6 +43,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className="flex-1 p-4 md:p-6 lg:p-8 flex flex-col">
           {children}
         </main>
+
+        {/* Dynamic copyright footer */}
+        <Footer />
       </div>
     </div>
   );
