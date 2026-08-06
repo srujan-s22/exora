@@ -12,6 +12,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/providers/toast-provider';
+import { useAuth } from '@/components/providers/auth-provider';
+import { hasAdminPermission } from '@/lib/utils/permission-helpers';
 import type { Exhibition } from '@/types/exhibition.types';
 
 interface StaffOption {
@@ -26,6 +28,8 @@ export default function EditExhibitionPage() {
   const params = useParams();
   const id = params.id as string;
   const { addToast } = useToast();
+  const { user } = useAuth();
+  const canManageLifecycle = hasAdminPermission(user, 'canManageExhibitions');
 
   // Loading states
   const [isLoading, setIsLoading] = React.useState(true);
@@ -298,6 +302,23 @@ export default function EditExhibitionPage() {
     return (
       <div className="flex flex-1 items-center justify-center py-24">
         <Spinner size="lg" className="text-accent-500" />
+      </div>
+    );
+  }
+
+  if (!canManageLifecycle) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center py-20 text-center space-y-4">
+        <Shield className="w-12 h-12 text-error" />
+        <h3 className="text-lg font-bold text-gray-200">Access Denied</h3>
+        <p className="text-xs text-gray-400 max-w-md">
+          You do not have the <strong>Manage Exhibition Lifecycle</strong> permission required to edit exhibition setup.
+        </p>
+        <Link href={`/admin/exhibitions/${id}`} passHref>
+          <Button variant="secondary" className="text-xs font-semibold">
+            Return to Exhibition Details
+          </Button>
+        </Link>
       </div>
     );
   }

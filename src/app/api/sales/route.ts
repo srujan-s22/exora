@@ -97,6 +97,11 @@ export async function POST(req: NextRequest) {
       return errorResponse('VALIDATION_ERROR', 'Exhibition not found', 400);
     }
 
+    const opCheck = ExhibitionService.isOperational(exhibition);
+    if (!opCheck.operational) {
+      return errorResponse('BAD_REQUEST', opCheck.reason || 'Ticket sales are disabled for this exhibition.', 400);
+    }
+
     if (user.role !== 'admin') {
       const isAssigned = (exhibition.assignedStaffIds || []).some(
         (staff: any) => staff.id?.toString() === user.id || staff.toString() === user.id

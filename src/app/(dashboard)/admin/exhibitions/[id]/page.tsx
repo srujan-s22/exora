@@ -17,7 +17,11 @@ import {
   BarChart3,
   Globe,
   Plus,
-  Info
+  Info,
+  StopCircle,
+  Clock,
+  CalendarPlus,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -26,7 +30,9 @@ import { StatusIndicator } from '@/components/shared/status-indicator';
 import { Tabs } from '@/components/ui/tabs';
 import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/providers/toast-provider';
+import { useAuth } from '@/components/providers/auth-provider';
 import { StatCard } from '@/components/shared/stat-card';
+import { hasAdminPermission } from '@/lib/utils/permission-helpers';
 import type { Exhibition } from '@/types/exhibition.types';
 
 interface ExhibitionStats {
@@ -41,6 +47,7 @@ export default function ExhibitionDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { addToast } = useToast();
+  const { user } = useAuth();
   const id = params.id as string;
 
   // State managers
@@ -53,6 +60,17 @@ export default function ExhibitionDetailPage() {
 
   // Modal display toggles
   const [showArchiveModal, setShowArchiveModal] = React.useState(false);
+  const [showPauseModal, setShowPauseModal] = React.useState(false);
+  const [showEndModal, setShowEndModal] = React.useState(false);
+  const [showExtendModal, setShowExtendModal] = React.useState(false);
+
+  // Form states for lifecycle modals
+  const [pauseReason, setPauseReason] = React.useState('');
+  const [endReason, setEndReason] = React.useState('');
+  const [extendReason, setExtendReason] = React.useState('');
+  const [extendNewDate, setExtendNewDate] = React.useState('');
+
+  const canManageLifecycle = hasAdminPermission(user, 'canManageExhibitions');
 
   const fetchExhibitionDetails = React.useCallback(async () => {
     setIsLoading(true);
@@ -99,35 +117,101 @@ export default function ExhibitionDetailPage() {
     }
   }, [id, fetchExhibitionDetails, fetchStats]);
 
-  const handleStatusToggle = async () => {
-    if (!exhibition) return;
+  const handlePause = async () => {
+    if (!pauseReason.trim()) {
+      addToast({ type: 'error', title: 'Reason required', message: 'Please enter a reason for pausing the exhibition.' });
+      return;
+    }
     setIsActionLoading(true);
-
-    const isCurrentActive = exhibition.status === 'active';
-    const nextStatus = isCurrentActive ? 'paused' : 'active';
-
     try {
-      const res = await fetch(`/api/exhibitions/${id}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/exhibitions/${id}/pause`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ reason: pauseReason }),
       });
-
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error?.message || 'Failed to update status');
-
-      setExhibition(body.data);
-      addToast({
-        type: 'success',
-        title: 'Status updated',
-        message: `Exhibition is now ${nextStatus === 'active' ? 'Active' : 'Paused'}.`,
-      });
+      if (!res.ok) throw new Error(body.error?.message || 'Failed to pause exhibition');
+      setExhibition(body.data?.exhibition || body.data);
+      addToast({ type: 'success', title: 'Exhibition Paused', message: `Exhibition '${exhibition?.name}' is now paused.` });
+      setShowPauseModal(false);
+      setPauseReason('');
     } catch (err: any) {
-      addToast({
-        type: 'error',
-        title: 'Status update failed',
-        message: err.message || 'Please try again later.',
+      addToast({ type: 'error', title: 'Action failed', message: err.message || 'Could not pause exhibition.' });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleResume = async () => {
+    setIsActionLoading(true);
+    try {
+      const res = await fetch(`/api/exhibitions/${id}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
       });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error?.message || 'Failed to resume exhibition');
+      setExhibition(body.data?.exhibition || body.data);
+      addToast({ type: 'success', title: 'Exhibition Resumed', message: `Exhibition '${exhibition?.name}' is now operational.` });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Action failed', message: err.message || 'Could not resume exhibition.' });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleEndNow = async () => {
+    if (!endReason.trim()) {
+      addToast({ type: 'error', title: 'Reason required', message: 'Please enter a reason for ending the exhibition.' });
+      return;
+    }
+    setIsActionLoading(true);
+    try {
+      const res = await fetch(`/api/exhibitions/${id}/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: endReason }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error?.message || 'Failed to end exhibition');
+      setExhibition(body.data?.exhibition || body.data);
+      addToast({ type: 'info', title: 'Exhibition Completed', message: `Exhibition '${exhibition?.name}' has been marked as completed.` });
+      setShowEndModal(false);
+      setEndReason('');
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Action failed', message: err.message || 'Could not end exhibition.' });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleExtend = async () => {
+    if (!extendNewDate) {
+      addToast({ type: 'error', title: 'Date required', message: 'Please select a new end date & time.' });
+      return;
+    }
+    if (!extendReason.trim()) {
+      addToast({ type: 'error', title: 'Reason required', message: 'Please enter a reason for extending the exhibition.' });
+      return;
+    }
+    setIsActionLoading(true);
+    try {
+      const newIsoDate = new Date(extendNewDate).toISOString();
+      const res = await fetch(`/api/exhibitions/${id}/extend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newEndDate: newIsoDate, reason: extendReason }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error?.message || 'Failed to extend exhibition');
+      setExhibition(body.data?.exhibition || body.data);
+      addToast({ type: 'success', title: 'Exhibition Extended', message: `Exhibition end date updated.` });
+      setShowExtendModal(false);
+      setExtendReason('');
+      setExtendNewDate('');
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Action failed', message: err.message || 'Could not extend exhibition.' });
     } finally {
       setIsActionLoading(false);
     }
@@ -236,7 +320,7 @@ export default function ExhibitionDetailPage() {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {exhibition.status !== 'archived' && (
+          {exhibition.status !== 'archived' && canManageLifecycle && (
             <>
               <Link href={`/admin/exhibitions/${id}/edit`} passHref>
                 <Button variant="secondary" className="text-xs font-semibold flex items-center gap-1.5 h-9">
@@ -244,24 +328,49 @@ export default function ExhibitionDetailPage() {
                   <span>Edit Setup</span>
                 </Button>
               </Link>
-              
+
+              {exhibition.status === 'paused' ? (
+                <Button
+                  variant="secondary"
+                  onClick={handleResume}
+                  isLoading={isActionLoading}
+                  className="text-xs font-semibold flex items-center gap-1.5 h-9 text-success-400 hover:text-success-300"
+                >
+                  <Play size={13} />
+                  <span>Resume Event</span>
+                </Button>
+              ) : exhibition.status !== 'completed' && exhibition.status !== 'closed' ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowPauseModal(true)}
+                  isLoading={isActionLoading}
+                  className="text-xs font-semibold flex items-center gap-1.5 h-9 text-warning-400 hover:text-warning-300"
+                >
+                  <Pause size={13} />
+                  <span>Pause Event</span>
+                </Button>
+              ) : null}
+
+              {exhibition.status !== 'completed' && exhibition.status !== 'closed' && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowEndModal(true)}
+                  isLoading={isActionLoading}
+                  className="text-xs font-semibold flex items-center gap-1.5 h-9 text-error hover:text-error/80"
+                >
+                  <StopCircle size={13} />
+                  <span>End Event</span>
+                </Button>
+              )}
+
               <Button
                 variant="secondary"
-                onClick={handleStatusToggle}
+                onClick={() => setShowExtendModal(true)}
                 isLoading={isActionLoading}
-                className="text-xs font-semibold flex items-center gap-1.5 h-9"
+                className="text-xs font-semibold flex items-center gap-1.5 h-9 text-accent-300 hover:text-accent-200"
               >
-                {exhibition.status === 'active' ? (
-                  <>
-                    <Pause size={13} className="text-warning-400" />
-                    <span>Pause Event</span>
-                  </>
-                ) : (
-                  <>
-                    <Play size={13} className="text-success-400" />
-                    <span>Activate Event</span>
-                  </>
-                )}
+                <CalendarPlus size={13} />
+                <span>Extend End Date</span>
               </Button>
 
               <Button
@@ -361,7 +470,7 @@ export default function ExhibitionDetailPage() {
                 )}
               </div>
 
-              {/* Right Column: Settings configuration summaries */}
+              {/* Right Column: Settings & Lifecycle configuration summaries */}
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -392,6 +501,37 @@ export default function ExhibitionDetailPage() {
                         {exhibition.capacity ? `${exhibition.capacity} visitors` : 'Unlimited'}
                       </span>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Lifecycle Status & Reason card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-bold text-gray-300 uppercase tracking-wider">Lifecycle Status</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-xs text-gray-400">
+                    <div className="flex items-center justify-between">
+                      <span>Status:</span>
+                      <StatusIndicator status={exhibition.status} />
+                    </div>
+                    {(exhibition as any).manualPauseReason && (
+                      <div className="bg-warning/10 border border-warning/20 p-2.5 rounded text-warning">
+                        <span className="font-bold block mb-0.5">Pause Reason:</span>
+                        {(exhibition as any).manualPauseReason}
+                      </div>
+                    )}
+                    {(exhibition as any).manualEndReason && (
+                      <div className="bg-gray-900 border border-gray-800 p-2.5 rounded text-gray-300">
+                        <span className="font-bold block mb-0.5">Completion Reason:</span>
+                        {(exhibition as any).manualEndReason}
+                      </div>
+                    )}
+                    {(exhibition as any).manualExtendReason && (
+                      <div className="bg-accent-500/10 border border-accent-500/20 p-2.5 rounded text-accent-300">
+                        <span className="font-bold block mb-0.5">Last Extension Reason:</span>
+                        {(exhibition as any).manualExtendReason}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -489,6 +629,81 @@ export default function ExhibitionDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Pause Modal */}
+      <Modal open={showPauseModal} onClose={() => setShowPauseModal(false)} title="Pause Exhibition">
+        <div className="space-y-4">
+          <p className="text-xs text-gray-400">
+            Pausing this exhibition will temporarily suspend all ticket sales and gate/ride scans.
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-gray-300 mb-1">Reason for Pausing *</label>
+            <textarea
+              value={pauseReason}
+              onChange={(e) => setPauseReason(e.target.value)}
+              placeholder="e.g. Temporary power outage / emergency maintenance"
+              className="w-full h-20 bg-gray-900 border border-gray-800 rounded p-2 text-xs text-gray-200 focus:outline-none focus:border-accent-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">
+            <Button variant="secondary" onClick={() => setShowPauseModal(false)} disabled={isActionLoading}>Cancel</Button>
+            <Button variant="secondary" className="bg-warning text-black hover:bg-warning/90 font-semibold" onClick={handlePause} isLoading={isActionLoading}>Confirm Pause</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* End Modal */}
+      <Modal open={showEndModal} onClose={() => setShowEndModal(false)} title="End Exhibition Now">
+        <div className="space-y-4">
+          <p className="text-xs text-gray-400">
+            Ending this exhibition will transition its status to COMPLETED and stop all ticketing operations permanently.
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-gray-300 mb-1">Reason for Ending *</label>
+            <textarea
+              value={endReason}
+              onChange={(e) => setEndReason(e.target.value)}
+              placeholder="e.g. Exhibition concluded early as per management directive"
+              className="w-full h-20 bg-gray-900 border border-gray-800 rounded p-2 text-xs text-gray-200 focus:outline-none focus:border-accent-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">
+            <Button variant="secondary" onClick={() => setShowEndModal(false)} disabled={isActionLoading}>Cancel</Button>
+            <Button variant="danger" onClick={handleEndNow} isLoading={isActionLoading}>Confirm End Event</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Extend Modal */}
+      <Modal open={showExtendModal} onClose={() => setShowExtendModal(false)} title="Extend Exhibition Time">
+        <div className="space-y-4">
+          <p className="text-xs text-gray-400">
+            Extend the end date and time of this exhibition to allow ongoing sales and gate validation scans.
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-gray-300 mb-1">New End Date & Time *</label>
+            <input
+              type="datetime-local"
+              value={extendNewDate}
+              onChange={(e) => setExtendNewDate(e.target.value)}
+              className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-xs text-gray-200 focus:outline-none focus:border-accent-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-300 mb-1">Reason for Extension *</label>
+            <textarea
+              value={extendReason}
+              onChange={(e) => setExtendReason(e.target.value)}
+              placeholder="e.g. Extended by 2 hours due to high visitor demand"
+              className="w-full h-20 bg-gray-900 border border-gray-800 rounded p-2 text-xs text-gray-200 focus:outline-none focus:border-accent-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">
+            <Button variant="secondary" onClick={() => setShowExtendModal(false)} disabled={isActionLoading}>Cancel</Button>
+            <Button variant="primary" onClick={handleExtend} isLoading={isActionLoading}>Confirm Extension</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Confirmation Archive Modal */}
       <Modal

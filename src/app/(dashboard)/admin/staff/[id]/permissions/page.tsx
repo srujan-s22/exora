@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import {
   ChevronLeft, Shield, ShieldCheck, Save, Users, KeyRound,
   ScrollText, UserPlus, CheckCircle, Lock, Plus, Ticket, Gamepad2,
-  Printer, History, AlertCircle, Sparkles, XCircle,
+  Printer, History, AlertCircle, Sparkles, XCircle, Calendar,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -38,13 +38,13 @@ const ADMIN_PERMISSION_ITEMS: PermissionItem[] = [
   {
     key: 'canManageStaff',
     label: 'Manage Staff',
-    description: 'Allows editing and deactivating staff members.',
+    description: 'Allows editing, deactivating, and updating permissions of staff.',
     icon: <Users size={16} />,
   },
   {
     key: 'canResetPasswords',
-    label: 'Request Password Resets',
-    description: 'Allows submitting password reset requests for staff members.',
+    label: 'Reset Passwords',
+    description: 'Allows submitting password reset requests for staff.',
     icon: <KeyRound size={16} />,
   },
   {
@@ -64,6 +64,12 @@ const ADMIN_PERMISSION_ITEMS: PermissionItem[] = [
     label: 'Create Exhibitions',
     description: 'Allows creating new exhibitions.',
     icon: <Plus size={16} />,
+  },
+  {
+    key: 'canManageExhibitions',
+    label: 'Manage Exhibition Lifecycle',
+    description: 'Allows pausing, resuming, extending, and manually ending exhibition lifecycles.',
+    icon: <Calendar size={16} />,
   },
   {
     key: 'canApproveTicketCancellation',

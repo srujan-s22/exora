@@ -7,6 +7,7 @@ import { Exhibition as ExhibitionModel } from '@/lib/db/models/exhibition.model'
 import { User as UserModel } from '@/lib/db/models/user.model';
 import { connectToDatabase } from '@/lib/db/connection';
 import { AuditService } from '@/lib/services/audit.service';
+import { ExhibitionService } from '@/lib/services/exhibition.service';
 import { generateHmac, verifyHmac, sha256, generateTicketNumber, generateTransactionId } from '@/lib/utils/crypto';
 import { generateQrDataUrl } from '@/lib/utils/qr';
 import { escapeRegex } from '@/lib/utils/sanitize';
@@ -176,8 +177,9 @@ export const RideService = {
       throw new Error('Exhibition not found or archived');
     }
 
-    if (exhibition.status !== 'active') {
-      throw new Error(`Exhibition is in '${exhibition.status}' state and is closed to sales.`);
+    const opCheck = ExhibitionService.isOperational(exhibition);
+    if (!opCheck.operational) {
+      throw new Error(opCheck.reason || 'Exhibition is not operational.');
     }
 
     if (ride.status === 'closed') {
@@ -452,6 +454,32 @@ export const RideService = {
         ticket: ticket.toJSON() as unknown as RideTicket,
         ride: ride.toJSON() as unknown as Ride,
         message: 'Ticket belongs to a different exhibition.',
+      };
+    }
+
+    // Verify Exhibition Operational Status
+    const exhibitionDoc = await ExhibitionModel.findById(exhibitionId);
+    const opCheck = ExhibitionService.isOperational(exhibitionDoc);
+    if (!opCheck.operational) {
+      await RideScanModel.create({
+        ticketId: ticket._id,
+        rideId: ride._id,
+        exhibitionId: new mongoose.Types.ObjectId(exhibitionId),
+        scannedBy: staffUser._id,
+        scannedAt: new Date(),
+        result: 'rejected_closed',
+        qrPayloadRaw: qrPayload,
+        reason: opCheck.reason || 'Exhibition is not operational.',
+        gateId: data.gateId,
+        requestId: data.requestId,
+      });
+
+      return {
+        valid: false,
+        result: 'rejected_closed',
+        ticket: ticket.toJSON() as unknown as RideTicket,
+        ride: ride.toJSON() as unknown as Ride,
+        message: opCheck.reason || 'Exhibition has ended / is closed. Access denied.',
       };
     }
 

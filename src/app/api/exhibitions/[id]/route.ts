@@ -7,6 +7,7 @@ import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { updateExhibitionSchema } from '@/lib/validators/exhibition.schema';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
+import { hasAdminPermission } from '@/lib/utils/permission-helpers';
 
 /**
  * GET /api/exhibitions/[id]
@@ -59,6 +60,10 @@ export async function PATCH(
       return errorResponse('FORBIDDEN', 'Only administrators can update exhibitions', 403);
     }
 
+    if (!hasAdminPermission(user, 'canManageExhibitions')) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to manage exhibition lifecycle or edit setup', 403);
+    }
+
     const { id } = await params;
     const body = await req.json();
     const parsed = updateExhibitionSchema.safeParse(body);
@@ -95,6 +100,10 @@ export async function DELETE(
     const user = await AuthService.verifyToken(token);
     if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
       return errorResponse('FORBIDDEN', 'Only administrators can archive exhibitions', 403);
+    }
+
+    if (!hasAdminPermission(user, 'canManageExhibitions')) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to archive exhibitions', 403);
     }
 
     const { id } = await params;

@@ -6,6 +6,7 @@ import { Sale as SaleModel } from '@/lib/db/models/sale.model';
 import { TicketScan as TicketScanModel } from '@/lib/db/models/ticket-scan.model';
 import { connectToDatabase } from '@/lib/db/connection';
 import { AuditService } from '@/lib/services/audit.service';
+import { NotificationService } from '@/lib/services/notification.service';
 import { escapeRegex } from '@/lib/utils/sanitize';
 import type { Exhibition, CreateExhibitionInput, UpdateExhibitionInput } from '@/types/exhibition.types';
 import type { PaginationParams, PaginationMeta } from '@/types/api.types';
@@ -62,17 +63,47 @@ export const ExhibitionService = {
     return doc.toJSON() as unknown as Exhibition;
   },
 
+  /**
+   * Automatically updates any active/upcoming exhibitions in the database whose end date has passed to 'completed'.
+   */
+  async autoCompleteExpiredExhibitions(): Promise<void> {
+    try {
+      const now = new Date();
+      await ExhibitionModel.updateMany(
+        {
+          status: { $nin: ['completed', 'closed', 'archived'] },
+          endDate: { $lt: now },
+        },
+        {
+          $set: { status: 'completed' },
+        }
+      );
+    } catch (err) {
+      console.error('Failed to auto-complete expired exhibitions:', err);
+    }
+  },
+
   async findById(id: string): Promise<Exhibition | null> {
     await connectToDatabase();
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
+    await this.autoCompleteExpiredExhibitions();
     const doc = await ExhibitionModel.findById(id).populate('assignedStaffIds', 'name staffId role');
-    return doc ? (doc.toJSON() as unknown as Exhibition) : null;
+    if (!doc) return null;
+    if (Date.now() > new Date(doc.endDate).getTime() && doc.status !== 'archived') {
+      doc.status = 'completed';
+    }
+    return doc.toJSON() as unknown as Exhibition;
   },
 
   async findBySlug(slug: string): Promise<Exhibition | null> {
     await connectToDatabase();
+    await this.autoCompleteExpiredExhibitions();
     const doc = await ExhibitionModel.findOne({ slug: slug.toLowerCase() });
-    return doc ? (doc.toJSON() as unknown as Exhibition) : null;
+    if (!doc) return null;
+    if (Date.now() > new Date(doc.endDate).getTime() && doc.status !== 'archived') {
+      doc.status = 'completed';
+    }
+    return doc.toJSON() as unknown as Exhibition;
   },
 
   async update(id: string, data: UpdateExhibitionInput, userId: string): Promise<Exhibition | null> {
@@ -177,6 +208,7 @@ export const ExhibitionService = {
 
   async list(params: PaginationParams & { status?: string; search?: string; category?: string; includeArchived?: boolean }): Promise<{ data: Exhibition[]; pagination: PaginationMeta }> {
     await connectToDatabase();
+    await this.autoCompleteExpiredExhibitions();
 
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(Math.max(1, params.limit || 20), 100);
@@ -209,13 +241,18 @@ export const ExhibitionService = {
       .limit(limit)
       .lean();
 
+    const nowMs = Date.now();
     const data = await Promise.all(
       docs.map(async (doc: any) => {
         const docIdStr = doc._id.toString();
         const stats = await ExhibitionService.getStats(docIdStr);
+        const effectiveStatus = (nowMs > new Date(doc.endDate).getTime() && doc.status !== 'archived')
+          ? 'completed'
+          : doc.status;
         return {
           ...doc,
           id: docIdStr,
+          status: effectiveStatus,
           ticketCount: stats.ticketsSold,
           revenue: stats.totalRevenue,
         } as unknown as Exhibition;
@@ -234,9 +271,278 @@ export const ExhibitionService = {
     };
   },
 
+  /**
+   * Evaluates the effective lifecycle status of an exhibition dynamically based on current server time.
+   * Auto-syncs status to 'completed' in DB if the exhibition end time has passed.
+   */
+  getEffectiveStatus(doc: any): string {
+    if (!doc) return 'closed';
+    if (doc.status === 'archived' || doc.status === 'paused' || doc.status === 'draft') {
+      return doc.status;
+    }
+    const now = Date.now();
+    const startDateMs = new Date(doc.startDate).getTime();
+    const endDateMs = new Date(doc.endDate).getTime();
+
+    if (now > endDateMs) {
+      if (doc.status !== 'completed' && doc.status !== 'closed') {
+        // Auto-complete in background if needed
+        ExhibitionModel.updateOne(
+          { _id: doc._id || doc.id, status: { $nin: ['completed', 'closed', 'archived'] } },
+          { $set: { status: 'completed', completedAt: new Date(endDateMs) } }
+        ).catch((err: any) => console.error('Failed to auto-sync exhibition completion:', err));
+      }
+      return 'completed';
+    }
+
+    if (now < startDateMs) {
+      return 'upcoming';
+    }
+
+    return 'active';
+  },
+
+  /**
+   * Checks whether an exhibition is currently operational for ticket sales and scans.
+   */
+  isOperational(doc: any): { operational: boolean; reason?: string; effectiveStatus: string } {
+    if (!doc) {
+      return { operational: false, reason: 'Exhibition not found', effectiveStatus: 'closed' };
+    }
+    if (doc.active === false || doc.archive === true) {
+      return { operational: false, reason: 'Exhibition is inactive or archived', effectiveStatus: 'archived' };
+    }
+
+    const effectiveStatus = this.getEffectiveStatus(doc);
+
+    if (doc.status === 'paused') {
+      return {
+        operational: false,
+        reason: doc.manualPauseReason
+          ? `Exhibition is manually paused: ${doc.manualPauseReason}`
+          : 'Exhibition is currently paused by admin.',
+        effectiveStatus: 'paused',
+      };
+    }
+
+    if (doc.status === 'draft') {
+      return { operational: false, reason: 'Exhibition is in draft state.', effectiveStatus: 'draft' };
+    }
+
+    if (effectiveStatus === 'upcoming') {
+      return {
+        operational: false,
+        reason: `Exhibition has not started yet (scheduled for ${new Date(doc.startDate).toLocaleString('en-IN')}).`,
+        effectiveStatus: 'upcoming',
+      };
+    }
+
+    if (effectiveStatus === 'completed') {
+      return {
+        operational: false,
+        reason: `Exhibition has completed (ended at ${new Date(doc.endDate).toLocaleString('en-IN')}).`,
+        effectiveStatus: 'completed',
+      };
+    }
+
+    if (effectiveStatus === 'active') {
+      return { operational: true, effectiveStatus: 'active' };
+    }
+
+    return { operational: false, reason: 'Exhibition is not operational.', effectiveStatus };
+  },
+
+  /**
+   * Manually pause an operational exhibition (Admin only).
+   */
+  async pauseExhibition(id: string, userId: string, reason: string): Promise<Exhibition | null> {
+    await connectToDatabase();
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+
+    const doc = await ExhibitionModel.findById(id);
+    if (!doc) return null;
+
+    const prevStatus = doc.status;
+    const now = new Date();
+
+    doc.status = 'paused';
+    doc.pausedAt = now;
+    doc.manualPauseReason = reason.trim();
+    doc.lastStatusChangeAt = now;
+    doc.lastStatusChangeBy = new mongoose.Types.ObjectId(userId);
+    doc.managedBy = new mongoose.Types.ObjectId(userId);
+    await doc.save();
+
+    await AuditService.create({
+      action: 'exhibition.pause' as any,
+      performedBy: userId,
+      performedByRole: 'admin',
+      targetType: 'exhibition',
+      targetId: doc._id.toString(),
+      details: { prevStatus, newStatus: 'paused', reason: reason.trim(), name: doc.name },
+    });
+
+    try {
+      const adminUsers = await UserModel.find({ role: { $in: ['super_admin', 'admin'] }, isActive: true }).select('_id');
+      if (adminUsers.length > 0) {
+        await NotificationService.sendBroadcastNotifications({
+          senderId: userId,
+          targetType: 'users',
+          recipientUserIds: adminUsers.map((u) => u._id.toString()),
+          title: 'Exhibition Paused',
+          message: `Exhibition '${doc.name}' was manually paused: ${reason.trim()}`,
+          type: 'alert',
+        });
+      }
+    } catch (nErr) {
+      console.error('Failed to send pause notification:', nErr);
+    }
+
+    return doc.toJSON() as unknown as Exhibition;
+  },
+
+  /**
+   * Resume a paused exhibition (Admin only).
+   */
+  async resumeExhibition(id: string, userId: string, reason?: string): Promise<Exhibition | null> {
+    await connectToDatabase();
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+
+    const doc = await ExhibitionModel.findById(id);
+    if (!doc) return null;
+
+    const prevStatus = doc.status;
+    const now = new Date();
+    const effective = this.getEffectiveStatus(doc);
+    const newStatus = effective === 'completed' ? 'completed' : 'active';
+
+    doc.status = newStatus;
+    doc.resumedAt = now;
+    doc.lastStatusChangeAt = now;
+    doc.lastStatusChangeBy = new mongoose.Types.ObjectId(userId);
+    doc.managedBy = new mongoose.Types.ObjectId(userId);
+    await doc.save();
+
+    await AuditService.create({
+      action: 'exhibition.resume' as any,
+      performedBy: userId,
+      performedByRole: 'admin',
+      targetType: 'exhibition',
+      targetId: doc._id.toString(),
+      details: { prevStatus, newStatus, reason: reason?.trim(), name: doc.name },
+    });
+
+    return doc.toJSON() as unknown as Exhibition;
+  },
+
+  /**
+   * Manually end an exhibition (Admin only).
+   */
+  async endExhibition(id: string, userId: string, reason: string): Promise<Exhibition | null> {
+    await connectToDatabase();
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+
+    const doc = await ExhibitionModel.findById(id);
+    if (!doc) return null;
+
+    const prevStatus = doc.status;
+    const now = new Date();
+
+    doc.status = 'completed';
+    doc.completedAt = now;
+    doc.manualEndReason = reason.trim();
+    doc.lastStatusChangeAt = now;
+    doc.lastStatusChangeBy = new mongoose.Types.ObjectId(userId);
+    doc.managedBy = new mongoose.Types.ObjectId(userId);
+    await doc.save();
+
+    await AuditService.create({
+      action: 'exhibition.end' as any,
+      performedBy: userId,
+      performedByRole: 'admin',
+      targetType: 'exhibition',
+      targetId: doc._id.toString(),
+      details: { prevStatus, newStatus: 'completed', reason: reason.trim(), name: doc.name },
+    });
+
+    try {
+      const adminUsers = await UserModel.find({ role: { $in: ['super_admin', 'admin'] }, isActive: true }).select('_id');
+      if (adminUsers.length > 0) {
+        await NotificationService.sendBroadcastNotifications({
+          senderId: userId,
+          targetType: 'users',
+          recipientUserIds: adminUsers.map((u) => u._id.toString()),
+          title: 'Exhibition Ended',
+          message: `Exhibition '${doc.name}' was ended: ${reason.trim()}`,
+          type: 'info',
+        });
+      }
+    } catch (nErr) {
+      console.error('Failed to send end notification:', nErr);
+    }
+
+    return doc.toJSON() as unknown as Exhibition;
+  },
+
+  /**
+   * Extend exhibition end date (Admin only).
+   */
+  async extendExhibition(id: string, userId: string, newEndDate: Date, reason: string): Promise<Exhibition | null> {
+    await connectToDatabase();
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+
+    const doc = await ExhibitionModel.findById(id);
+    if (!doc) return null;
+
+    const prevEndDate = doc.endDate;
+    const prevStatus = doc.status;
+    const now = new Date();
+
+    if (newEndDate.getTime() <= new Date(doc.startDate).getTime()) {
+      throw new Error('New end date must be after start date');
+    }
+
+    doc.endDate = newEndDate;
+    doc.manualExtendReason = reason.trim();
+    doc.lastStatusChangeAt = now;
+    doc.lastStatusChangeBy = new mongoose.Types.ObjectId(userId);
+    doc.managedBy = new mongoose.Types.ObjectId(userId);
+
+    // If exhibition was completed but extended into the future, reactivate
+    if (now.getTime() < newEndDate.getTime() && doc.status === 'completed') {
+      doc.status = 'active';
+    }
+
+    await doc.save();
+
+    await AuditService.create({
+      action: 'exhibition.extend' as any,
+      performedBy: userId,
+      performedByRole: 'admin',
+      targetType: 'exhibition',
+      targetId: doc._id.toString(),
+      details: {
+        prevEndDate,
+        newEndDate,
+        reason: reason.trim(),
+        prevStatus,
+        newStatus: doc.status,
+        name: doc.name,
+      },
+    });
+
+    return doc.toJSON() as unknown as Exhibition;
+  },
+
   async getActiveExhibitions(): Promise<Exhibition[]> {
     await connectToDatabase();
-    const docs = await ExhibitionModel.find({ status: 'active', archive: { $ne: true } })
+    const now = new Date();
+    const docs = await ExhibitionModel.find({
+      status: 'active',
+      archive: { $ne: true },
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+    })
       .sort({ name: 1, _id: 1 })
       .lean();
     return docs.map((d: any) => ({ ...d, id: d._id.toString() } as unknown as Exhibition));
@@ -244,7 +550,13 @@ export const ExhibitionService = {
 
   async getActiveExhibitionsForStaff(userId: string, userRole: string): Promise<Exhibition[]> {
     await connectToDatabase();
-    const query: Record<string, any> = { status: 'active', archive: { $ne: true } };
+    const now = new Date();
+    const query: Record<string, any> = {
+      status: 'active',
+      archive: { $ne: true },
+      startDate: { $lte: now },
+      endDate: { $gte: now },
+    };
     if (userRole !== 'admin' && userRole !== 'super_admin') {
       query.assignedStaffIds = new mongoose.Types.ObjectId(userId);
     }

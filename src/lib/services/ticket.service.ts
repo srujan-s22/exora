@@ -5,6 +5,7 @@ import { User as UserModel } from '@/lib/db/models/user.model';
 import { Sale as SaleModel } from '@/lib/db/models/sale.model';
 import { connectToDatabase } from '@/lib/db/connection';
 import { AuditService } from '@/lib/services/audit.service';
+import { ExhibitionService } from '@/lib/services/exhibition.service';
 import { createQrPayload, generateQrDataUrl, parseQrPayload } from '@/lib/utils/qr';
 import { sha256, generateTicketNumber, generateTransactionId } from '@/lib/utils/crypto';
 import { escapeRegex } from '@/lib/utils/sanitize';
@@ -337,9 +338,10 @@ export const TicketService = {
       };
     }
 
-    // Ensure Gate Exhibition active
+    // Ensure Gate Exhibition operational
     const gateExhibition = await ExhibitionModel.findById(data.exhibitionId);
-    if (!gateExhibition || gateExhibition.status !== 'active') {
+    const opCheck = ExhibitionService.isOperational(gateExhibition);
+    if (!gateExhibition || !opCheck.operational) {
       await TicketScanModel.create({
         ticketId: ticket._id,
         exhibitionId: new mongoose.Types.ObjectId(data.exhibitionId),
@@ -347,7 +349,7 @@ export const TicketService = {
         scannedAt: new Date(),
         result: 'rejected_expired',
         qrPayloadRaw: qrPayload,
-        reason: 'Exhibition status is not active.',
+        reason: opCheck.reason || 'Exhibition status is not operational.',
         ticketStatusBefore,
         ticketStatusAfter: ticketStatusBefore,
         gateId: data.gateId,
@@ -358,7 +360,7 @@ export const TicketService = {
         valid: false,
         result: 'rejected_expired',
         ticket: ticket.toJSON() as unknown as Ticket,
-        message: `Exhibition '${gateExhibition?.name || 'Exhibition'}' is currently closed for entry.`,
+        message: opCheck.reason || `Exhibition '${gateExhibition?.name || 'Exhibition'}' is currently closed for entry.`,
       };
     }
 

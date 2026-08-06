@@ -32,6 +32,15 @@ export interface IExhibition extends Document {
   archive: boolean;
   notes?: string;
   images?: string[];
+  completedAt?: Date;
+  pausedAt?: Date;
+  resumedAt?: Date;
+  managedBy?: mongoose.Types.ObjectId;
+  lastStatusChangeAt?: Date;
+  lastStatusChangeBy?: mongoose.Types.ObjectId;
+  manualPauseReason?: string;
+  manualEndReason?: string;
+  manualExtendReason?: string;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -146,6 +155,30 @@ const ExhibitionSchema = new Schema<IExhibition>(
     images: [{
       type: String,
     }],
+    completedAt: Date,
+    pausedAt: Date,
+    resumedAt: Date,
+    managedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    lastStatusChangeAt: Date,
+    lastStatusChangeBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    manualPauseReason: {
+      type: String,
+      trim: true,
+    },
+    manualEndReason: {
+      type: String,
+      trim: true,
+    },
+    manualExtendReason: {
+      type: String,
+      trim: true,
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
