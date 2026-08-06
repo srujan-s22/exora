@@ -505,7 +505,30 @@ export const RideService = {
       };
     }
 
-    // 5. Verify Ticket Status (Cancelled or Used)
+    // 5. Verify Ticket Status (Pending Cancellation / Cancelled / Used)
+    if (ticket.cancellationStatus === 'pending') {
+      await RideScanModel.create({
+        ticketId: ticket._id,
+        rideId: ride._id,
+        exhibitionId: new mongoose.Types.ObjectId(exhibitionId),
+        scannedBy: staffUser._id,
+        scannedAt: new Date(),
+        result: 'rejected_invalid',
+        qrPayloadRaw: qrPayload,
+        reason: 'Ride ticket cancellation approval is pending.',
+        gateId: data.gateId,
+        requestId: data.requestId,
+      });
+
+      return {
+        valid: false,
+        result: 'rejected_invalid',
+        ticket: ticket.toJSON() as unknown as RideTicket,
+        ride: ride.toJSON() as unknown as Ride,
+        message: 'Ride ticket cancellation is pending admin approval. Access denied.',
+      };
+    }
+
     if (ticket.status === 'cancelled') {
       await RideScanModel.create({
         ticketId: ticket._id,

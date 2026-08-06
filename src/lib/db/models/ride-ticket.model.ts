@@ -23,6 +23,7 @@ export interface IRideTicket extends Document {
   customerName?: string;
   customerPhone?: string;
   metadata?: Record<string, unknown>;
+  cancellationStatus?: 'pending' | 'approved' | 'rejected' | null;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -131,6 +132,11 @@ const RideTicketSchema = new Schema<IRideTicket>(
     },
     metadata: {
       type: Schema.Types.Mixed,
+    },
+    cancellationStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', null],
+      default: null,
     },
   },
   {

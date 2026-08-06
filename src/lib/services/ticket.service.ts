@@ -362,7 +362,30 @@ export const TicketService = {
       };
     }
 
-    // 4. Verify Ticket Status (Cancelled / Expired / Exhausted)
+    // 4. Verify Ticket Status (Pending Cancellation / Cancelled / Expired / Exhausted)
+    if (ticket.cancellationStatus === 'pending') {
+      await TicketScanModel.create({
+        ticketId: ticket._id,
+        exhibitionId: gateExhibition._id,
+        scannedBy: new mongoose.Types.ObjectId(gateStaffId),
+        scannedAt: new Date(),
+        result: 'rejected_invalid',
+        qrPayloadRaw: qrPayload,
+        reason: 'Ticket cancellation approval is pending.',
+        ticketStatusBefore,
+        ticketStatusAfter: ticketStatusBefore,
+        gateId: data.gateId,
+        requestId: data.requestId,
+      });
+
+      return {
+        valid: false,
+        result: 'rejected_invalid',
+        ticket: ticket.toJSON() as unknown as Ticket,
+        message: 'Ticket cancellation is pending admin approval. Access denied.',
+      };
+    }
+
     if (ticket.status === 'cancelled') {
       await TicketScanModel.create({
         ticketId: ticket._id,

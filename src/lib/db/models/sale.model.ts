@@ -25,6 +25,8 @@ export interface ISale extends Document {
   cancelledBy?: mongoose.Types.ObjectId;
   cancelReason?: string;
   cancellationWindowSeconds?: number;
+  cancellationStatus?: 'pending' | 'approved' | 'rejected' | null;
+  pendingCancellationRequestId?: mongoose.Types.ObjectId;
 }
 
 const SaleSchema = new Schema<ISale>(
@@ -44,6 +46,15 @@ const SaleSchema = new Schema<ISale>(
     cancellationWindowSeconds: {
       type: Number,
       default: 30,
+    },
+    cancellationStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', null],
+      default: null,
+    },
+    pendingCancellationRequestId: {
+      type: Schema.Types.ObjectId,
+      ref: 'CancellationRequest',
     },
     transactionId: {
       type: String,

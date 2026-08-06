@@ -6,15 +6,18 @@ import { Ticket as TicketModel } from '@/lib/db/models/ticket.model';
 import { SystemSettings } from '@/lib/db/models/system-settings.model';
 import { AuthService } from '@/lib/services/auth.service';
 import { AuditService } from '@/lib/services/audit.service';
+import { CancellationRequestService } from '@/lib/services/cancellation-request.service';
 import { connectToDatabase } from '@/lib/db/connection';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
-import { hasCounterPermission } from '@/lib/utils/permission-helpers';
+import { hasCounterPermission, hasAdminPermission } from '@/lib/utils/permission-helpers';
 
 /**
  * POST /api/sales/[id]/cancel
- * Soft-cancels a general ticket sale transaction and marks all its tickets as cancelled.
+ * Entry ticket sale cancellation route.
+ * - Counter staff: Creates a PENDING cancellation request for Admin approval.
+ * - Authorized Admin / Super Admin: Directly soft-cancels the transaction.
  */
 export async function POST(
   req: NextRequest,
@@ -42,6 +45,39 @@ export async function POST(
     }
 
     const { id } = await params;
+    const body = await req.json();
+    const { reason, note } = body;
+    if (!reason || !reason.trim()) {
+      return errorResponse('VALIDATION_ERROR', 'Cancellation reason is required.', 400);
+    }
+
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+    const ipAddress = req.headers.get('x-forwarded-for') || 'unknown';
+
+    // Counter staff flow: Create approval request
+    if (user.role === 'counter') {
+      const requestDoc = await CancellationRequestService.createRequest(
+        { saleId: id, saleType: 'entry', cancellationReason: reason.trim(), note },
+        user,
+        { ipAddress, userAgent }
+      );
+
+      return successResponse({
+        message: 'Cancellation request submitted to Admin for approval',
+        cancellationPending: true,
+        cancellationRequest: requestDoc.toJSON(),
+      });
+    }
+
+    // Admin / Super Admin flow: Verify approval permission
+    const canApprove =
+      hasAdminPermission(user, 'canApproveTicketCancellation') ||
+      hasAdminPermission(user, 'canApproveEntryTicketCancellation');
+
+    if (!canApprove) {
+      return errorResponse('FORBIDDEN', 'Access denied: You do not have permission to approve cancellations', 403);
+    }
+
     const sale = await SaleModel.findById(id);
     if (!sale) {
       return errorResponse('NOT_FOUND', 'Transaction not found', 404);
@@ -51,22 +87,8 @@ export async function POST(
       return errorResponse('BAD_REQUEST', 'Transaction is already cancelled', 400);
     }
 
-    // Get time-limit configuration
     const settings = await SystemSettings.findOne();
     const windowSeconds = settings?.cancellationWindowSeconds || 30;
-
-    const elapsedMs = Date.now() - new Date(sale.soldAt).getTime();
-
-    // Check if within window (counters only; admins/super_admins can override)
-    if (user.role === 'counter' && elapsedMs > windowSeconds * 1000) {
-      return errorResponse('FORBIDDEN', 'Cancellation window has expired.', 403);
-    }
-
-    const body = await req.json();
-    const { reason } = body;
-    if (!reason || !reason.trim()) {
-      return errorResponse('VALIDATION_ERROR', 'Cancellation reason is required.', 400);
-    }
 
     // Perform soft-cancellation on Sale
     sale.status = 'cancelled';
@@ -74,17 +96,14 @@ export async function POST(
     sale.cancelledBy = user.id as any;
     sale.cancelReason = reason.trim();
     sale.cancellationWindowSeconds = windowSeconds;
+    sale.cancellationStatus = 'approved';
     await sale.save();
 
     // Soft-cancel all linked tickets
     await TicketModel.updateMany(
       { _id: { $in: sale.tickets } },
-      { $set: { status: 'cancelled' } }
+      { $set: { status: 'cancelled', cancellationStatus: 'approved' } }
     );
-
-    // Retrieve network details for audit trail
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-    const ipAddress = req.headers.get('x-forwarded-for') || 'unknown';
 
     // Log to Audit History
     await AuditService.create({
@@ -100,7 +119,7 @@ export async function POST(
         ticketType: sale.ticketType,
         ipAddress,
         userAgent,
-        override: user.role !== 'counter',
+        override: true,
       },
     });
 

@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import {
   ChevronLeft, Shield, ShieldCheck, Save, Users, KeyRound,
   ScrollText, UserPlus, CheckCircle, Lock, Plus, Ticket, Gamepad2,
-  Printer, History, AlertCircle, Sparkles,
+  Printer, History, AlertCircle, Sparkles, XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -64,6 +64,12 @@ const ADMIN_PERMISSION_ITEMS: PermissionItem[] = [
     label: 'Create Exhibitions',
     description: 'Allows creating new exhibitions.',
     icon: <Plus size={16} />,
+  },
+  {
+    key: 'canApproveTicketCancellation',
+    label: 'Approve Ticket Cancellations',
+    description: 'Allows reviewing, approving, and rejecting counter ticket cancellation requests.',
+    icon: <XCircle size={16} />,
   },
 ];
 

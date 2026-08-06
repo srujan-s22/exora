@@ -412,3 +412,75 @@ Exora should always remain:
 - scanner-safe
 
 Every change should make the system better without risking the live deployment.
+
+
+## Changelog Policy
+
+Exora uses a committed `.changelog/` folder as the official engineering history of the project.
+
+### Mandatory rule
+For every meaningful completed change, the agent must update the changelog before considering the task finished.
+
+A meaningful change includes:
+- new features
+- security fixes
+- performance improvements
+- database or schema changes
+- API changes
+- UI or UX changes
+- scanner or printing changes
+- permission or auth changes
+- deployment-related fixes
+- important bug fixes
+
+Do not create changelog entries for:
+- formatting-only changes
+- comment-only changes
+- import sorting
+- typo fixes
+- temporary experiments
+- discarded work
+- debug-only edits
+
+### Required workflow
+After making a meaningful change:
+1. Update the relevant code.
+2. Verify the build or relevant checks.
+3. Create or update a file inside `.changelog/updates/`.
+4. Add the entry to `.changelog/index.md`.
+5. Include the final commit hash if available.
+6. Include deployment status if the change was deployed.
+7. Mention the changelog file name in the final response.
+
+### File naming
+Use short sequential names such as:
+- `u001-security.md`
+- `u002-performance.md`
+- `u003-scanner.md`
+- `u004-printing.md`
+
+### Required contents of each changelog entry
+Each entry should include:
+- title
+- date
+- status
+- short summary
+- why the change was made
+- files changed
+- technical impact
+- database/API/UI impact if relevant
+- verification result
+- deployment status
+- rollback notes if relevant
+
+### Maintenance rule
+The changelog is part of the repository and must stay committed to Git.
+Do not add `.changelog/` to `.gitignore`.
+
+### Definition of done
+A task is not complete until:
+- the change is implemented,
+- the build or relevant verification passes,
+- the changelog is updated,
+- the index is updated,
+- and the final response names the changelog file.

@@ -39,6 +39,7 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
       title: 'User Management',
       items: [
         { label: 'Password Resets', href: '/admin/password-resets', icon: 'KeyRound' },
+        { label: 'Cancellation Requests', href: '/admin/cancellation-requests', icon: 'FileX' },
       ],
     },
     {
@@ -79,6 +80,7 @@ export const NAVIGATION: Record<UserRoleType, NavSection[]> = {
       title: 'User Management',
       items: [
         { label: 'Password Resets', href: '/admin/password-resets', icon: 'KeyRound', requirePermission: 'canResetPasswords' },
+        { label: 'Cancellation Requests', href: '/admin/cancellation-requests', icon: 'FileX', requirePermission: 'canApproveTicketCancellation' },
       ],
     },
     {

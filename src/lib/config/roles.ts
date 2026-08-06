@@ -45,6 +45,9 @@ export const USER_PERMISSION_KEYS = [
   'canApproveResets',
   'canCreateAdmins',
   'canCreateExhibitions',
+  'canApproveTicketCancellation',
+  'canApproveEntryTicketCancellation',
+  'canApproveRideTicketCancellation',
   // Counter operation permissions
   'canSellEntryTickets',
   'canViewEntrySales',
@@ -67,6 +70,9 @@ export const DEFAULT_ADMIN_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canApproveResets: false,
   canCreateAdmins: false,
   canCreateExhibitions: false,
+  canApproveTicketCancellation: false,
+  canApproveEntryTicketCancellation: false,
+  canApproveRideTicketCancellation: false,
   // Admins inherently bypass counter permission checks via role, but set true for completeness
   canSellEntryTickets: true,
   canViewEntrySales: true,
@@ -87,6 +93,9 @@ export const SUPER_ADMIN_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canApproveResets: true,
   canCreateAdmins: true,
   canCreateExhibitions: true,
+  canApproveTicketCancellation: true,
+  canApproveEntryTicketCancellation: true,
+  canApproveRideTicketCancellation: true,
   canSellEntryTickets: true,
   canViewEntrySales: true,
   canReprintEntryTickets: true,
@@ -111,6 +120,9 @@ export const DEFAULT_COUNTER_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canApproveResets: false,
   canCreateAdmins: false,
   canCreateExhibitions: false,
+  canApproveTicketCancellation: false,
+  canApproveEntryTicketCancellation: false,
+  canApproveRideTicketCancellation: false,
   // Counter operation permissions — all enabled by default
   canSellEntryTickets: true,
   canViewEntrySales: true,
@@ -176,6 +188,12 @@ export const PERMISSIONS = {
   'password_reset.create': ['super_admin', 'admin'],
   'password_reset.approve': ['super_admin'],
   'password_reset.list': ['super_admin', 'admin'],
+
+  // Cancellation requests
+  'cancellation_request.create': ['super_admin', 'admin', 'counter'],
+  'cancellation_request.approve': ['super_admin', 'admin'],
+  'cancellation_request.reject': ['super_admin', 'admin'],
+  'cancellation_request.list': ['super_admin', 'admin'],
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -76,9 +76,13 @@ export const AUDIT_ACTIONS = [
   'password_reset.approved',
   'password_reset.rejected',
   'password_reset.completed',
+  'cancellation_request.create',
+  'cancellation_request.approve',
+  'cancellation_request.reject',
+  'transaction.cancelled',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 // ── Audit Target Types ──
-export const AUDIT_TARGET_TYPES = ['user', 'exhibition', 'ticket', 'sale', 'settings', 'password_reset'] as const;
+export const AUDIT_TARGET_TYPES = ['user', 'exhibition', 'ticket', 'sale', 'ride_sale', 'settings', 'password_reset', 'cancellation_request'] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];

@@ -23,6 +23,8 @@ export interface IRideSale extends Document {
   cancelledBy?: mongoose.Types.ObjectId;
   cancelReason?: string;
   cancellationWindowSeconds?: number;
+  cancellationStatus?: 'pending' | 'approved' | 'rejected' | null;
+  pendingCancellationRequestId?: mongoose.Types.ObjectId;
 }
 
 const RideSaleSchema = new Schema<IRideSale>(
@@ -42,6 +44,15 @@ const RideSaleSchema = new Schema<IRideSale>(
     cancellationWindowSeconds: {
       type: Number,
       default: 30,
+    },
+    cancellationStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', null],
+      default: null,
+    },
+    pendingCancellationRequestId: {
+      type: Schema.Types.ObjectId,
+      ref: 'CancellationRequest',
     },
     transactionId: {
       type: String,

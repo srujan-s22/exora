@@ -15,7 +15,7 @@ import { useAuth } from '@/components/providers/auth-provider';
 import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui/spinner';
 import { TableSkeleton } from '@/components/shared/skeletons';
-import { Printer, RefreshCw } from 'lucide-react';
+import { Printer, RefreshCw, Clock } from 'lucide-react';
 
 interface CancelTransactionButtonProps {
   row: any;
@@ -28,13 +28,14 @@ function CancelTransactionButton({ row, saleType, onCancelled }: CancelTransacti
   const [timeLeft, setTimeLeft] = React.useState<number>(0);
   const [showConfirmModal, setShowConfirmModal] = React.useState(false);
   const [reason, setReason] = React.useState('');
+  const [customNote, setCustomNote] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
 
   const windowSeconds = row.cancellationWindowSeconds || 30;
   const soldAtTime = new Date(row.soldAt).getTime();
 
   React.useEffect(() => {
-    if (row.status === 'cancelled') {
+    if (row.status === 'cancelled' || row.cancellationStatus === 'pending') {
       return;
     }
 
@@ -55,45 +56,49 @@ function CancelTransactionButton({ row, saleType, onCancelled }: CancelTransacti
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [soldAtTime, windowSeconds, row.status]);
+  }, [soldAtTime, windowSeconds, row.status, row.cancellationStatus]);
 
   const handleCancelSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reason.trim()) {
+    const finalReason = reason === 'Other' ? customNote.trim() : reason;
+
+    if (!finalReason) {
       addToast({
         type: 'warning',
         title: 'Reason Required',
-        message: 'Please select a reason.',
+        message: 'Please select or enter a cancellation reason.',
       });
       return;
     }
 
     setSubmitting(true);
     try {
-      const endpoint = saleType === 'ride' 
-        ? `/api/rides/sales/${row.id}/cancel` 
-        : `/api/sales/${row.id}/cancel`;
-        
-      const res = await fetch(endpoint, {
+      const apiSaleType = saleType === 'ride' ? 'ride' : 'entry';
+      const res = await fetch('/api/cancellation-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({
+          saleId: row.id,
+          saleType: apiSaleType,
+          cancellationReason: finalReason,
+          note: customNote.trim(),
+        }),
       });
 
       const body = await res.json();
       if (res.ok && body.success) {
         addToast({
           type: 'success',
-          title: 'Transaction Cancelled',
-          message: 'The transaction has been successfully cancelled.',
+          title: 'Request Submitted',
+          message: 'Cancellation request sent to admin for approval.',
         });
         setShowConfirmModal(false);
         onCancelled();
       } else {
         addToast({
           type: 'error',
-          title: 'Cancellation Failed',
-          message: body.error?.message || 'Failed to cancel.',
+          title: 'Request Failed',
+          message: body.error?.message || 'Failed to submit cancellation request.',
         });
       }
     } catch (err) {
@@ -116,6 +121,14 @@ function CancelTransactionButton({ row, saleType, onCancelled }: CancelTransacti
     );
   }
 
+  if (row.cancellationStatus === 'pending') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse select-none">
+        <Clock size={12} /> Pending Approval
+      </span>
+    );
+  }
+
   if (timeLeft <= 0) {
     return (
       <span className="text-xs text-gray-500 font-semibold select-none">
@@ -132,25 +145,26 @@ function CancelTransactionButton({ row, saleType, onCancelled }: CancelTransacti
           size="sm"
           onClick={() => {
             setReason('');
+            setCustomNote('');
             setShowConfirmModal(true);
           }}
           className="text-[10px] py-1 px-2.5 font-bold uppercase tracking-wider bg-error hover:bg-error/95"
         >
-          Cancel Sale
+          Request Cancellation
         </Button>
         <span className="text-[10px] font-mono text-warning-400 select-none animate-pulse">
-          Void (00:{timeLeft.toString().padStart(2, '0')})
+          Time Remaining (00:{timeLeft.toString().padStart(2, '0')})
         </span>
       </div>
 
       <Modal
         open={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
-        title="Confirm Void Transaction"
+        title="Request Ticket Cancellation"
       >
         <form onSubmit={handleCancelSubmit} className="space-y-4">
           <div className="text-sm text-gray-300 space-y-2">
-            <p>Are you sure you want to void transaction <span className="font-mono text-gray-150 font-bold">{row.transactionId}</span>?</p>
+            <p>Request cancellation for transaction <span className="font-mono text-gray-150 font-bold">{row.transactionId}</span>?</p>
             <div className="bg-gray-950 p-3 rounded-lg border border-gray-800 space-y-1">
               <div className="flex justify-between">
                 <span className="text-gray-400 text-xs">Total Amount:</span>
@@ -161,27 +175,38 @@ function CancelTransactionButton({ row, saleType, onCancelled }: CancelTransacti
                 <span className="font-bold text-gray-200">{row.ticketCount} tickets</span>
               </div>
             </div>
-            <p className="text-xs text-error font-medium">This action cannot be undone. All tickets will be soft-deleted/cancelled.</p>
+            <p className="text-xs text-amber-400 font-medium bg-amber-500/10 p-2 rounded border border-amber-500/20">
+              Note: This will send a request to an authorized Admin. The ticket will remain active until approved.
+            </p>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Cancellation Reason</label>
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Cancellation Reason *</label>
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent-500"
             >
               <option value="">-- Select a reason --</option>
-              <option value="Issued 4 instead of 3">Issued 4 instead of 3</option>
-              <option value="Wrong ticket quantity">Wrong ticket quantity</option>
+              <option value="Wrong ticket quantity issued">Wrong ticket quantity issued</option>
               <option value="Duplicate transaction">Duplicate transaction</option>
-              <option value="Other">Other / Typo correction</option>
+              <option value="Customer payment issue / cancellation">Customer payment issue / cancellation</option>
+              <option value="Wrong payment method selected">Wrong payment method selected</option>
+              <option value="Other">Other / Custom reason</option>
             </select>
 
-            {reason === 'Other' && (
+            {reason === 'Other' ? (
               <Input
-                placeholder="Enter custom cancellation notes..."
-                onChange={(e) => setReason(e.target.value)}
+                placeholder="Enter specific cancellation reason..."
+                value={customNote}
+                onChange={(e) => setCustomNote(e.target.value)}
+                className="mt-2 text-sm"
+              />
+            ) : (
+              <Input
+                placeholder="Optional short note for admin..."
+                value={customNote}
+                onChange={(e) => setCustomNote(e.target.value)}
                 className="mt-2 text-sm"
               />
             )}
@@ -193,15 +218,15 @@ function CancelTransactionButton({ row, saleType, onCancelled }: CancelTransacti
               variant="secondary"
               onClick={() => setShowConfirmModal(false)}
             >
-              Close
+              Cancel
             </Button>
             <Button
               type="submit"
               variant="danger"
               isLoading={submitting}
-              disabled={!reason}
+              disabled={!reason || (reason === 'Other' && !customNote.trim())}
             >
-              Confirm Void
+              Submit Request
             </Button>
           </div>
         </form>

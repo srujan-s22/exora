@@ -24,6 +24,7 @@ export interface ITicket extends Document {
   customerName?: string;
   customerPhone?: string;
   metadata?: Record<string, unknown>;
+  cancellationStatus?: 'pending' | 'approved' | 'rejected' | null;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -136,6 +137,11 @@ const TicketSchema = new Schema<ITicket>(
     },
     metadata: {
       type: Schema.Types.Mixed,
+    },
+    cancellationStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', null],
+      default: null,
     },
   },
   {
