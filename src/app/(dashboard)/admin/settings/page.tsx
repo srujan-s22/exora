@@ -5,6 +5,7 @@ import {
   User, Settings, Monitor, Lock, Mail, Heading,
   Volume2, VolumeX, RefreshCw, Save, ShieldAlert,
   HelpCircle, UserCheck, Key, Shield, Info, Printer, Eye, Sliders,
+  QrCode, ShieldCheck, ShieldX, Copy, Check, AlertTriangle, Download, X,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ContentWrapper } from '@/components/layout/content-wrapper';
@@ -40,6 +41,37 @@ export default function SettingsPage() {
   });
   const [profileErrors, setProfileErrors] = React.useState<Record<string, string>>({});
   const [isSavingProfile, setIsSavingProfile] = React.useState(false);
+
+  // MFA State (Super Admin)
+  const [mfaStatus, setMfaStatus] = React.useState<{ enabled: boolean; totpEnabledAt?: string; lastTotpLoginAt?: string } | null>(null);
+  
+  // Setup Modal State
+  const [isSetupModalOpen, setIsSetupModalOpen] = React.useState(false);
+  const [isStartingSetup, setIsStartingSetup] = React.useState(false);
+  const [setupData, setSetupData] = React.useState<{ setupToken: string; secret: string; qrCodeUrl: string; recoveryCodes: string[] } | null>(null);
+  const [setupCode, setSetupCode] = React.useState('');
+  const [isEnablingMfa, setIsEnablingMfa] = React.useState(false);
+  const [setupError, setSetupError] = React.useState('');
+  const [copiedSecret, setCopiedSecret] = React.useState(false);
+  const [copiedCodes, setCopiedCodes] = React.useState(false);
+
+  // Disable Modal State
+  const [isDisableModalOpen, setIsDisableModalOpen] = React.useState(false);
+  const [disablePassword, setDisablePassword] = React.useState('');
+  const [disableCode, setDisableCode] = React.useState('');
+  const [disableRecoveryCode, setDisableRecoveryCode] = React.useState('');
+  const [useDisableRecovery, setUseDisableRecovery] = React.useState(false);
+  const [isDisablingMfa, setIsDisablingMfa] = React.useState(false);
+  const [disableError, setDisableError] = React.useState('');
+
+  // Regenerate Recovery Codes Modal State
+  const [isRegenModalOpen, setIsRegenModalOpen] = React.useState(false);
+  const [regenPassword, setRegenPassword] = React.useState('');
+  const [regenCode, setRegenCode] = React.useState('');
+  const [isRegenerating, setIsRegenerating] = React.useState(false);
+  const [newRecoveryCodes, setNewRecoveryCodes] = React.useState<string[] | null>(null);
+  const [regenError, setRegenError] = React.useState('');
+  const [copiedRegenCodes, setCopiedRegenCodes] = React.useState(false);
 
   // System Settings Form State
   const [systemForm, setSystemForm] = React.useState({
@@ -163,9 +195,13 @@ export default function SettingsPage() {
         }
       }
 
-      // 2. Fetch System Settings (only for Super Admins)
+      // 2. Fetch System Settings & MFA Status (only for Super Admins)
       if (authUser?.role === 'super_admin') {
-        const settingsRes = await fetch('/api/admin/settings');
+        const [settingsRes, mfaRes] = await Promise.all([
+          fetch('/api/admin/settings'),
+          fetch('/api/auth/mfa/status'),
+        ]);
+
         if (settingsRes.ok) {
           const settingsBody = await settingsRes.json();
           if (settingsBody.success) {
@@ -185,6 +221,13 @@ export default function SettingsPage() {
             if (s.printConfig) {
               setPrintForm(s.printConfig);
             }
+          }
+        }
+
+        if (mfaRes.ok) {
+          const mfaBody = await mfaRes.json();
+          if (mfaBody.success) {
+            setMfaStatus(mfaBody.data);
           }
         }
       }
@@ -372,6 +415,173 @@ export default function SettingsPage() {
     }
   };
 
+  // Handle Start MFA Setup
+  const handleStartMfaSetup = async () => {
+    setIsStartingSetup(true);
+    setSetupError('');
+    try {
+      const res = await fetch('/api/auth/mfa/setup', { method: 'POST' });
+      const body = await res.json();
+
+      if (!res.ok || !body.success) {
+        throw new Error(body.error?.message || 'Failed to initiate MFA setup');
+      }
+
+      setSetupData(body.data);
+      setSetupCode('');
+      setIsSetupModalOpen(true);
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Setup failed', message: err.message });
+    } finally {
+      setIsStartingSetup(false);
+    }
+  };
+
+  // Handle Confirm Enable MFA
+  const handleConfirmEnableMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!setupData) return;
+    if (!setupCode || setupCode.length !== 6) {
+      setSetupError('Please enter the 6-digit verification code from your authenticator app');
+      return;
+    }
+
+    setIsEnablingMfa(true);
+    setSetupError('');
+
+    try {
+      const res = await fetch('/api/auth/mfa/enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          setupToken: setupData.setupToken,
+          code: setupCode.trim(),
+        }),
+      });
+
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        setSetupError(body.error?.message || 'Invalid verification code');
+        return;
+      }
+
+      addToast({
+        type: 'success',
+        title: 'MFA Enabled',
+        message: 'Two-factor authentication has been enabled on your account.',
+      });
+
+      setIsSetupModalOpen(false);
+      setSetupData(null);
+      setSetupCode('');
+      loadData();
+    } catch (err: any) {
+      setSetupError(err.message || 'Failed to enable MFA');
+    } finally {
+      setIsEnablingMfa(false);
+    }
+  };
+
+  // Handle Confirm Disable MFA
+  const handleConfirmDisableMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!disablePassword) {
+      setDisableError('Current password is required');
+      return;
+    }
+
+    if (!useDisableRecovery && !disableCode) {
+      setDisableError('Verification code is required');
+      return;
+    }
+
+    if (useDisableRecovery && !disableRecoveryCode) {
+      setDisableError('Recovery code is required');
+      return;
+    }
+
+    setIsDisablingMfa(true);
+    setDisableError('');
+
+    try {
+      const res = await fetch('/api/auth/mfa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: disablePassword,
+          code: useDisableRecovery ? undefined : disableCode.trim(),
+          recoveryCode: useDisableRecovery ? disableRecoveryCode.trim() : undefined,
+        }),
+      });
+
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        setDisableError(body.error?.message || 'Failed to disable MFA');
+        return;
+      }
+
+      addToast({
+        type: 'success',
+        title: 'MFA Disabled',
+        message: 'Two-factor authentication has been disabled.',
+      });
+
+      setIsDisableModalOpen(false);
+      setDisablePassword('');
+      setDisableCode('');
+      setDisableRecoveryCode('');
+      loadData();
+    } catch (err: any) {
+      setDisableError(err.message || 'Failed to disable MFA');
+    } finally {
+      setIsDisablingMfa(false);
+    }
+  };
+
+  // Handle Confirm Regenerate Recovery Codes
+  const handleConfirmRegenCodes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regenPassword) {
+      setRegenError('Current password is required');
+      return;
+    }
+    if (!regenCode || regenCode.length !== 6) {
+      setRegenError('6-digit TOTP code is required');
+      return;
+    }
+
+    setIsRegenerating(true);
+    setRegenError('');
+
+    try {
+      const res = await fetch('/api/auth/mfa/regenerate-recovery-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: regenPassword,
+          code: regenCode.trim(),
+        }),
+      });
+
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        setRegenError(body.error?.message || 'Failed to regenerate recovery codes');
+        return;
+      }
+
+      setNewRecoveryCodes(body.data.recoveryCodes);
+      addToast({
+        type: 'success',
+        title: 'Recovery Codes Regenerated',
+        message: 'Your previous recovery codes have been invalidated.',
+      });
+    } catch (err: any) {
+      setRegenError(err.message || 'Failed to regenerate recovery codes');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <ContentWrapper>
@@ -429,7 +639,8 @@ export default function SettingsPage() {
         <div className="flex-1 w-full space-y-6">
           {/* PROFILE TAB */}
           {activeTab === 'profile' && (
-            <Card className="border border-gray-800 bg-gray-900/50 shadow-xl">
+            <>
+              <Card className="border border-gray-800 bg-gray-900/50 shadow-xl">
               <CardHeader className="border-b border-gray-850 pb-4">
                 <CardTitle className="text-base flex items-center gap-2">
                   <User size={18} className="text-accent-400" />
@@ -531,7 +742,111 @@ export default function SettingsPage() {
                 </CardFooter>
               </form>
             </Card>
-          )}
+
+            {/* TWO-FACTOR AUTHENTICATION CARD (Super Admin Only) */}
+            {authUser?.role === 'super_admin' && (
+              <Card className="border border-gray-800 bg-gray-900/50 shadow-xl mt-6">
+                <CardHeader className="border-b border-gray-850 pb-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <ShieldCheck size={18} className="text-accent-400" />
+                      <span>Two-Factor Authentication (TOTP MFA)</span>
+                    </CardTitle>
+                    {mfaStatus?.enabled ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 select-none">
+                        <ShieldCheck size={13} />
+                        <span>MFA Protected</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 select-none">
+                        <ShieldX size={13} />
+                        <span>Disabled</span>
+                      </span>
+                    )}
+                  </div>
+                  <CardDescription>
+                    Protect your Super Admin account using Google Authenticator, Authy, Microsoft Authenticator, or 2FAS.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-5 space-y-4">
+                  {mfaStatus?.enabled ? (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-gray-950/60 rounded-xl border border-gray-800 space-y-2">
+                        <p className="text-xs font-semibold text-gray-200">
+                          Two-factor authentication is active on your account.
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          Every sign-in attempt will require your password and a 6-digit TOTP verification code from your authenticator app.
+                        </p>
+                        {mfaStatus.totpEnabledAt && (
+                          <p className="text-[11px] font-mono text-gray-500 pt-1">
+                            Enabled on: {new Date(mfaStatus.totpEnabledAt).toLocaleString('en-IN')}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setIsRegenModalOpen(true);
+                            setRegenError('');
+                            setRegenPassword('');
+                            setRegenCode('');
+                            setNewRecoveryCodes(null);
+                          }}
+                          leftIcon={<RefreshCw size={14} />}
+                        >
+                          Regenerate Recovery Codes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => {
+                            setIsDisableModalOpen(true);
+                            setDisableError('');
+                            setDisablePassword('');
+                            setDisableCode('');
+                            setDisableRecoveryCode('');
+                          }}
+                          leftIcon={<ShieldX size={14} />}
+                        >
+                          Disable Two-Factor Authentication
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-amber-500/5 rounded-xl border border-amber-500/20 space-y-2">
+                        <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                          <AlertTriangle size={14} />
+                          <span>Enhanced Security Recommended</span>
+                        </p>
+                        <p className="text-xs text-gray-300">
+                          As a Super Admin, enabling Two-Factor Authentication prevents unauthorized access even if your password is compromised.
+                        </p>
+                      </div>
+
+                      <div>
+                        <Button
+                          type="button"
+                          onClick={handleStartMfaSetup}
+                          isLoading={isStartingSetup}
+                          leftIcon={<QrCode size={15} />}
+                        >
+                          Enable Two-Factor Authentication
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
 
           {/* SYSTEM TAB (Super Admin only) */}
           {activeTab === 'system' && authUser?.role === 'super_admin' && (
@@ -908,6 +1223,318 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+
+      {/* ── MFA SETUP MODAL ── */}
+      {isSetupModalOpen && setupData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-xl w-full p-6 space-y-6 shadow-2xl my-8 relative">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+              <div className="flex items-center gap-2.5">
+                <QrCode className="text-accent-400" size={20} />
+                <h2 className="text-lg font-bold text-gray-50">Enable Two-Factor Authentication</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setIsSetupModalOpen(false);
+                  setSetupData(null);
+                }}
+                className="text-gray-400 hover:text-gray-200 p-1 rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmEnableMfa} className="space-y-6">
+              {/* Step 1: QR & Key */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                  Step 1: Scan QR Code or enter setup key
+                </p>
+                <div className="flex flex-col sm:flex-row items-center gap-5 p-4 bg-gray-950/80 rounded-xl border border-gray-800">
+                  <div className="shrink-0 p-2 bg-white rounded-xl shadow-md">
+                    <img src={setupData.qrCodeUrl} alt="MFA QR Code" className="w-36 h-36" />
+                  </div>
+                  <div className="space-y-2.5 text-center sm:text-left flex-1 min-w-0">
+                    <p className="text-xs text-gray-400">
+                      Scan this QR code using Google Authenticator, 2FAS, Authy, or Microsoft Authenticator.
+                    </p>
+                    <div>
+                      <span className="text-[11px] font-semibold text-gray-500 block uppercase">Manual Setup Key</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="px-2.5 py-1 bg-gray-900 border border-gray-700/60 rounded text-xs font-mono font-bold text-accent-300 break-all select-all">
+                          {setupData.secret}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(setupData.secret);
+                            setCopiedSecret(true);
+                            setTimeout(() => setCopiedSecret(false), 2000);
+                          }}
+                          className="p-1.5 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 transition-colors cursor-pointer shrink-0"
+                          title="Copy setup key"
+                        >
+                          {copiedSecret ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: Recovery Codes */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                    Step 2: Save Emergency Recovery Codes
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(setupData.recoveryCodes.join('\n'));
+                      setCopiedCodes(true);
+                      setTimeout(() => setCopiedCodes(false), 2000);
+                    }}
+                    className="text-xs text-accent-400 hover:text-accent-300 font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedCodes ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                    <span>{copiedCodes ? 'Copied Codes' : 'Copy All Codes'}</span>
+                  </button>
+                </div>
+                <div className="p-3.5 bg-gray-950/80 rounded-xl border border-gray-800 space-y-2">
+                  <p className="text-[11px] text-amber-300/90 font-medium flex items-center gap-1.5">
+                    <AlertTriangle size={13} className="shrink-0" />
+                    <span>Store these single-use codes safely. They will NOT be shown again!</span>
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-xs text-gray-200">
+                    {setupData.recoveryCodes.map((code, idx) => (
+                      <div key={idx} className="p-1.5 bg-gray-900 border border-gray-800 rounded text-center font-bold">
+                        {code}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3: Verification */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                  Step 3: Enter 6-digit verification code
+                </p>
+                <Input
+                  label="Verification Code from Authenticator App"
+                  placeholder="123456"
+                  value={setupCode}
+                  onChange={(e) => setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength={6}
+                  leftIcon={<Lock size={15} />}
+                  className="text-center font-mono text-base tracking-widest"
+                  error={setupError}
+                  disabled={isEnablingMfa}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setIsSetupModalOpen(false);
+                    setSetupData(null);
+                  }}
+                  disabled={isEnablingMfa}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" isLoading={isEnablingMfa} leftIcon={<ShieldCheck size={16} />}>
+                  Confirm & Enable 2FA
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MFA DISABLE MODAL ── */}
+      {isDisableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldX className="text-rose-400" size={20} />
+                <h2 className="text-base font-bold text-gray-50">Disable Two-Factor Authentication</h2>
+              </div>
+              <button
+                onClick={() => setIsDisableModalOpen(false)}
+                className="text-gray-400 hover:text-gray-200 p-1 rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmDisableMfa} className="space-y-4">
+              <p className="text-xs text-gray-300">
+                To confirm disabling two-factor authentication, please enter your current password and either a 6-digit authenticator code or recovery code.
+              </p>
+
+              <Input
+                label="Current Password"
+                type="password"
+                placeholder="••••••••"
+                value={disablePassword}
+                onChange={(e) => setDisablePassword(e.target.value)}
+                leftIcon={<Lock size={15} />}
+                disabled={isDisablingMfa}
+              />
+
+              {!useDisableRecovery ? (
+                <Input
+                  label="6-Digit Verification Code"
+                  placeholder="123456"
+                  value={disableCode}
+                  onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength={6}
+                  leftIcon={<Lock size={15} />}
+                  className="text-center font-mono text-base tracking-widest"
+                  disabled={isDisablingMfa}
+                />
+              ) : (
+                <Input
+                  label="Recovery Code"
+                  placeholder="XXXX-XXXX-XXXX"
+                  value={disableRecoveryCode}
+                  onChange={(e) => setDisableRecoveryCode(e.target.value.toUpperCase())}
+                  leftIcon={<Lock size={15} />}
+                  className="text-center font-mono text-xs tracking-wider uppercase"
+                  disabled={isDisablingMfa}
+                />
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setUseDisableRecovery(!useDisableRecovery);
+                  setDisableError('');
+                }}
+                className="text-xs text-accent-400 hover:text-accent-300 font-medium block text-center w-full cursor-pointer"
+              >
+                {useDisableRecovery ? 'Use 6-digit TOTP code instead' : 'Use emergency recovery code instead'}
+              </button>
+
+              {disableError && <p className="text-xs text-error font-medium text-center">{disableError}</p>}
+
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setIsDisableModalOpen(false)}
+                  disabled={isDisablingMfa}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="danger" isLoading={isDisablingMfa} leftIcon={<ShieldX size={15} />}>
+                  Disable MFA
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── REGENERATE RECOVERY CODES MODAL ── */}
+      {isRegenModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="text-accent-400" size={18} />
+                <h2 className="text-base font-bold text-gray-50">Regenerate Recovery Codes</h2>
+              </div>
+              <button
+                onClick={() => setIsRegenModalOpen(false)}
+                className="text-gray-400 hover:text-gray-200 p-1 rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {!newRecoveryCodes ? (
+              <form onSubmit={handleConfirmRegenCodes} className="space-y-4">
+                <p className="text-xs text-gray-300">
+                  Regenerating recovery codes will invalidate all previously generated recovery codes. Enter your password and 6-digit TOTP code to proceed.
+                </p>
+
+                <Input
+                  label="Current Password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={regenPassword}
+                  onChange={(e) => setRegenPassword(e.target.value)}
+                  leftIcon={<Lock size={15} />}
+                  disabled={isRegenerating}
+                />
+
+                <Input
+                  label="6-Digit Verification Code"
+                  placeholder="123456"
+                  value={regenCode}
+                  onChange={(e) => setRegenCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength={6}
+                  leftIcon={<Lock size={15} />}
+                  className="text-center font-mono text-base tracking-widest"
+                  disabled={isRegenerating}
+                />
+
+                {regenError && <p className="text-xs text-error font-medium text-center">{regenError}</p>}
+
+                <div className="flex justify-end gap-3 pt-2 border-t border-gray-800">
+                  <Button type="button" variant="secondary" onClick={() => setIsRegenModalOpen(false)} disabled={isRegenerating}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" isLoading={isRegenerating} leftIcon={<RefreshCw size={15} />}>
+                    Generate New Codes
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+                  <Check size={15} />
+                  <span>New recovery codes generated successfully!</span>
+                </p>
+                <div className="p-3.5 bg-gray-950/80 rounded-xl border border-gray-800 space-y-2">
+                  <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-xs text-gray-200">
+                    {newRecoveryCodes.map((code, idx) => (
+                      <div key={idx} className="p-1.5 bg-gray-900 border border-gray-800 rounded text-center font-bold">
+                        {code}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(newRecoveryCodes.join('\n'));
+                      setCopiedRegenCodes(true);
+                      setTimeout(() => setCopiedRegenCodes(false), 2000);
+                    }}
+                    className="text-xs text-accent-400 hover:text-accent-300 font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedRegenCodes ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                    <span>{copiedRegenCodes ? 'Copied Codes' : 'Copy All Codes'}</span>
+                  </button>
+
+                  <Button type="button" onClick={() => setIsRegenModalOpen(false)}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </ContentWrapper>
   );
 }

@@ -84,6 +84,15 @@ export const AUDIT_ACTIONS = [
   'cancellation_request.approve',
   'cancellation_request.reject',
   'transaction.cancelled',
+  'user.mfa_enabled',
+  'user.mfa_disabled',
+  'user.mfa_login_success',
+  'user.mfa_login_failed',
+  'user.mfa_recovery_login_success',
+  'user.mfa_recovery_failed',
+  'user.mfa_recovery_codes_regenerated',
+  'user.mfa_enable_failed',
+  'user.mfa_disable_failed',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

@@ -9,7 +9,8 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   isSuperAdmin: boolean;
-  login: (staffId: string, password: string) => Promise<void>;
+  login: (staffId: string, password: string) => Promise<{ mfaRequired?: boolean; mfaTicket?: string } | void>;
+  verifyMfa: (mfaTicket: string, code?: string, recoveryCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   hasPermission: (permission: UserPermissionKey) => boolean;
@@ -60,6 +61,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(body.error?.message || 'Invalid Staff ID or password');
       }
 
+      if (body.data?.mfaRequired) {
+        setIsLoading(false);
+        return {
+          mfaRequired: true,
+          mfaTicket: body.data.mfaTicket,
+        };
+      }
+
+      setUser(body.data.user);
+    } catch (error) {
+      setUser(null);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const verifyMfa = async (mfaTicket: string, code?: string, recoveryCode?: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/mfa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mfaTicket, code, recoveryCode }),
+      });
+      const body = await res.json();
+
+      if (!res.ok || !body.success) {
+        throw new Error(body.error?.message || 'Invalid verification code');
+      }
+
       setUser(body.data.user);
     } catch (error) {
       setUser(null);
@@ -101,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         isSuperAdmin,
         login,
+        verifyMfa,
         logout,
         refreshUser,
         hasPermission,

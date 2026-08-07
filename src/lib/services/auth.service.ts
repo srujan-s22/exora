@@ -35,14 +35,18 @@ export const AuthService = {
    * Authenticate a user with staffId and password.
    * Returns the user and JWT token on success.
    */
-  async login(credentials: LoginCredentials, ipAddress?: string, userAgent?: string): Promise<{ user: AuthUser; token: string }> {
+  async login(
+    credentials: LoginCredentials,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<{ user: AuthUser; token: string; mfaRequired?: boolean; mfaTicket?: string }> {
     await connectToDatabase();
 
     const staffId = credentials.staffId.trim().toUpperCase();
 
     // Field Projection: select only fields required for authentication & token generation
     const userDoc = await UserModel.findOne({ staffId })
-      .select('staffId name role permissions isActive assignedExhibitions +passwordHash');
+      .select('staffId name role permissions isActive assignedExhibitions totpEnabled +passwordHash');
 
     // Security Note: Constant-time authentication mitigation.
     // If the staff ID does not exist, run a dummy bcrypt comparison so the execution duration
@@ -78,40 +82,10 @@ export const AuthService = {
     // 4. Resolve permissions
     const permissions = resolvePermissions(userDoc.role, (userDoc.permissions as any)?.toObject?.() || userDoc.permissions);
 
-    // 5. Generate JWT
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       throw new Error('Server configuration error: JWT secret is missing.');
     }
-
-    const payload = {
-      sub: userDoc._id.toString(),
-      staffId: userDoc.staffId,
-      role: userDoc.role,
-      permissions,
-      exhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
-    };
-
-    const token = signJwt(payload, secret, '8h');
-
-    // 6. Update lastLoginAt, lastLoginIp
-    userDoc.lastLoginAt = new Date();
-    if (ipAddress) {
-      userDoc.lastLoginIp = ipAddress;
-    }
-    await userDoc.save();
-
-    // 7. Create success audit log
-    await AuditService.create({
-      action: 'user.login',
-      performedBy: userDoc._id.toString(),
-      performedByRole: userDoc.role,
-      targetType: 'user',
-      targetId: userDoc._id.toString(),
-      details: { staffId },
-      ipAddress,
-      userAgent,
-    });
 
     const transformedUser: AuthUser = {
       id: userDoc._id.toString(),
@@ -122,6 +96,57 @@ export const AuthService = {
       assignedExhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
       isActive: userDoc.isActive,
     };
+
+    // 5. Check if MFA is enabled for this user
+    if (userDoc.totpEnabled) {
+      const mfaTicket = signJwt(
+        {
+          sub: userDoc._id.toString(),
+          staffId: userDoc.staffId,
+          role: userDoc.role,
+          type: 'mfa_pending',
+        },
+        secret,
+        '5m'
+      );
+
+      return {
+        user: transformedUser,
+        token: '',
+        mfaRequired: true,
+        mfaTicket,
+      };
+    }
+
+    // 6. Generate final session JWT
+    const payload = {
+      sub: userDoc._id.toString(),
+      staffId: userDoc.staffId,
+      role: userDoc.role,
+      permissions,
+      exhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
+    };
+
+    const token = signJwt(payload, secret, '8h');
+
+    // 7. Update lastLoginAt, lastLoginIp
+    userDoc.lastLoginAt = new Date();
+    if (ipAddress) {
+      userDoc.lastLoginIp = ipAddress;
+    }
+    await userDoc.save();
+
+    // 8. Create success audit log
+    await AuditService.create({
+      action: 'user.login',
+      performedBy: userDoc._id.toString(),
+      performedByRole: userDoc.role,
+      targetType: 'user',
+      targetId: userDoc._id.toString(),
+      details: { staffId },
+      ipAddress,
+      userAgent,
+    });
 
     return { user: transformedUser, token };
   },
@@ -139,7 +164,7 @@ export const AuthService = {
       }
 
       const decoded = jwt.verify(token, secret) as any;
-      if (!decoded || !decoded.sub) {
+      if (!decoded || !decoded.sub || decoded.type === 'mfa_pending') {
         return null;
       }
 

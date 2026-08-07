@@ -37,9 +37,18 @@ export const POST = withRateLimit(
       const userAgent = req.headers.get('user-agent') || undefined;
 
       // 3. Authenticate credentials
-      const { user, token } = await AuthService.login(parsed.data, ipAddress, userAgent);
+      const { user, token, mfaRequired, mfaTicket } = await AuthService.login(parsed.data, ipAddress, userAgent);
 
-      // 4. Set HTTP-only cookie
+      // If MFA is required, return mfaTicket without issuing the final session cookie
+      if (mfaRequired) {
+        return successResponse({
+          user,
+          mfaRequired: true,
+          mfaTicket,
+        });
+      }
+
+      // 4. Set HTTP-only cookie for non-MFA login
       const cookieStore = await cookies();
       cookieStore.set({
         name: AUTH_COOKIE_NAME,

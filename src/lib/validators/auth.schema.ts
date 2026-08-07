@@ -29,3 +29,36 @@ export const changePasswordSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+export const mfaVerifySchema = z
+  .object({
+    mfaTicket: z.string().min(1, 'MFA ticket is required'),
+    code: z.string().optional(),
+    recoveryCode: z.string().optional(),
+  })
+  .refine((data) => data.code || data.recoveryCode, {
+    message: 'Either TOTP code or recovery code is required',
+    path: ['code'],
+  });
+
+export const mfaEnableSchema = z.object({
+  setupToken: z.string().min(1, 'Setup token is required'),
+  code: z.string().length(6, 'TOTP code must be 6 digits'),
+});
+
+export const mfaDisableSchema = z
+  .object({
+    password: z.string().min(1, 'Password is required'),
+    code: z.string().optional(),
+    recoveryCode: z.string().optional(),
+  })
+  .refine((data) => data.code || data.recoveryCode, {
+    message: 'Either TOTP code or recovery code is required',
+    path: ['code'],
+  });
+
+export const mfaRegenerateSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+  code: z.string().length(6, 'TOTP code must be 6 digits'),
+});
+

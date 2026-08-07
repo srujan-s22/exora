@@ -40,6 +40,10 @@ export function withAuth(handler: AuthenticatedHandler) {
 
       const payload = jwt.verify(token, secret) as JwtPayload;
 
+      if ((payload as any).type === 'mfa_pending') {
+        return errorResponse('UNAUTHORIZED', 'Multi-factor authentication required', 401);
+      }
+
       // Attach user to request
       const authenticatedReq = req as AuthenticatedRequest;
       authenticatedReq.user = payload;

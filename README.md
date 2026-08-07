@@ -110,6 +110,7 @@ MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/exora?retryW
 JWT_SECRET=your_super_secret_jwt_key_min_32_chars
 QR_HMAC_SECRET=your_super_secret_qr_hmac_key_min_32_chars
 BOOTSTRAP_SECRET=your_initial_setup_secret_key
+TOTP_ENCRYPTION_KEY=your_32_byte_hex_totp_encryption_key_min_64_hex_chars
 
 # Application Settings
 NEXT_PUBLIC_APP_URL=http://localhost:3000

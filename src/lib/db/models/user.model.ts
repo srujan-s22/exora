@@ -37,6 +37,13 @@ export interface IUser extends Document {
   lastLoginAt?: Date;
   lastLoginIp?: string;
   passwordUpdatedAt?: Date;
+  totpEnabled?: boolean;
+  totpSecretEncrypted?: string;
+  totpVerifiedAt?: Date;
+  totpRecoveryCodesHashed?: string[];
+  totpEnabledAt?: Date;
+  totpDisabledAt?: Date;
+  lastTotpLoginAt?: Date;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -139,6 +146,22 @@ const UserSchema = new Schema<IUser>(
     lastLoginAt: Date,
     lastLoginIp: String,
     passwordUpdatedAt: Date,
+    totpEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    totpSecretEncrypted: {
+      type: String,
+      select: false,
+    },
+    totpVerifiedAt: Date,
+    totpRecoveryCodesHashed: {
+      type: [String],
+      select: false,
+    },
+    totpEnabledAt: Date,
+    totpDisabledAt: Date,
+    lastTotpLoginAt: Date,
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -156,6 +179,8 @@ const UserSchema = new Schema<IUser>(
         }
         delete obj.__v;
         delete obj.passwordHash;
+        delete obj.totpSecretEncrypted;
+        delete obj.totpRecoveryCodesHashed;
         return obj;
       },
     },

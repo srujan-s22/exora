@@ -75,7 +75,7 @@ function decodeJwtPayload(token: string): { sub: string; staffId: string; role: 
     const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
     const parsed = JSON.parse(decoded);
 
-    if (!parsed.sub || !parsed.role || !parsed.exp) return null;
+    if (!parsed.sub || !parsed.role || !parsed.exp || parsed.type === 'mfa_pending') return null;
 
     // Check expiration
     const now = Math.floor(Date.now() / 1000);
