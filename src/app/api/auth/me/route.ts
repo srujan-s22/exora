@@ -15,7 +15,12 @@ export async function GET() {
 
     const user = await AuthService.verifyToken(token);
     if (!user) {
-      return errorResponse('UNAUTHORIZED', 'Invalid or expired session', 401);
+      const res = errorResponse('UNAUTHORIZED', 'Invalid, expired, or revoked session', 401);
+      res.headers.set(
+        'Set-Cookie',
+        `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
+      );
+      return res;
     }
 
     return successResponse({ user });

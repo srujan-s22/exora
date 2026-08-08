@@ -4,6 +4,10 @@ import { cookies } from 'next/headers';
 import { errorResponse } from '@/lib/utils/api-response';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { logger } from '@/lib/utils/logger';
+import { SessionService } from '@/lib/services/session.service';
+import { User as UserModel } from '@/lib/db/models/user.model';
+import { connectToDatabase } from '@/lib/db/connection';
+import { resolvePermissions } from '@/lib/config/roles';
 import type { JwtPayload } from '@/types/auth.types';
 
 export interface AuthenticatedRequest extends NextRequest {
@@ -44,9 +48,39 @@ export function withAuth(handler: AuthenticatedHandler) {
         return errorResponse('UNAUTHORIZED', 'Multi-factor authentication required', 401);
       }
 
+      // Verify server-side session validity if session ID is embedded
+      if (payload.sid) {
+        const sessionValidation = await SessionService.validateSession(payload.sid);
+        if (!sessionValidation.valid) {
+          const res = errorResponse(
+            'SESSION_REVOKED',
+            'Your session has been revoked or expired. Please log in again.',
+            401
+          );
+          // Purge cookie from browser immediately
+          res.headers.set(
+            'Set-Cookie',
+            `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
+          );
+          return res;
+        }
+      }
+
       // Attach user to request
       const authenticatedReq = req as AuthenticatedRequest;
       authenticatedReq.user = payload;
+
+      // Re-hydrate permissions from DB for Admin role so permission changes apply in real-time
+      if (payload.role === 'admin' && payload.sub) {
+        await connectToDatabase();
+        const freshUser = await UserModel.findById(payload.sub).select('permissions role isActive').lean();
+        if (freshUser) {
+          if (!freshUser.isActive) {
+            return errorResponse('UNAUTHORIZED', 'Account is deactivated', 401);
+          }
+          authenticatedReq.user.permissions = resolvePermissions(freshUser.role, freshUser.permissions as any);
+        }
+      }
 
       return handler(authenticatedReq, context);
     } catch (error) {

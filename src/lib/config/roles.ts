@@ -49,6 +49,7 @@ export const USER_PERMISSION_KEYS = [
   'canApproveTicketCancellation',
   'canApproveEntryTicketCancellation',
   'canApproveRideTicketCancellation',
+  'canManageSessions',
   // Counter operation permissions
   'canSellEntryTickets',
   'canViewEntrySales',
@@ -75,6 +76,7 @@ export const DEFAULT_ADMIN_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canApproveTicketCancellation: false,
   canApproveEntryTicketCancellation: false,
   canApproveRideTicketCancellation: false,
+  canManageSessions: false,
   // Admins inherently bypass counter permission checks via role, but set true for completeness
   canSellEntryTickets: true,
   canViewEntrySales: true,
@@ -99,6 +101,7 @@ export const SUPER_ADMIN_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canApproveTicketCancellation: true,
   canApproveEntryTicketCancellation: true,
   canApproveRideTicketCancellation: true,
+  canManageSessions: true,
   canSellEntryTickets: true,
   canViewEntrySales: true,
   canReprintEntryTickets: true,
@@ -127,6 +130,7 @@ export const DEFAULT_COUNTER_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canApproveTicketCancellation: false,
   canApproveEntryTicketCancellation: false,
   canApproveRideTicketCancellation: false,
+  canManageSessions: false,
   // Counter operation permissions — all enabled by default
   canSellEntryTickets: true,
   canViewEntrySales: true,
@@ -137,6 +141,28 @@ export const DEFAULT_COUNTER_PERMISSIONS: Record<UserPermissionKey, boolean> = {
   canReprintRideTickets: true,
   canCancelRideTickets: true,
 };
+
+/**
+ * Resolve effective user permissions for a given role and stored permission map.
+ */
+export function resolvePermissions(role: string, storedPermissions?: Record<string, boolean>): Record<UserPermissionKey, boolean> {
+  if (role === 'super_admin') {
+    return { ...SUPER_ADMIN_PERMISSIONS };
+  }
+  if (role === 'admin' && storedPermissions) {
+    return {
+      ...DEFAULT_ADMIN_PERMISSIONS,
+      ...storedPermissions,
+    } as Record<UserPermissionKey, boolean>;
+  }
+  if (role === 'counter') {
+    return {
+      ...DEFAULT_COUNTER_PERMISSIONS,
+      ...(storedPermissions || {}),
+    } as Record<UserPermissionKey, boolean>;
+  }
+  return { ...DEFAULT_ADMIN_PERMISSIONS };
+}
 
 /**
  * Permission matrix defining what each role can access.
@@ -198,6 +224,11 @@ export const PERMISSIONS = {
   'cancellation_request.approve': ['super_admin', 'admin'],
   'cancellation_request.reject': ['super_admin', 'admin'],
   'cancellation_request.list': ['super_admin', 'admin'],
+
+  // Session management
+  'session.read': ['super_admin', 'admin', 'counter', 'gate', 'ride'],
+  'session.revoke': ['super_admin', 'admin', 'counter', 'gate', 'ride'],
+  'session.manage_all': ['super_admin', 'admin'],
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;

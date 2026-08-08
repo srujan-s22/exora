@@ -91,13 +91,13 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans antialiased">
         <ThemeProvider>
-          <AuthProvider>
-            <ToastProvider>
+          <ToastProvider>
+            <AuthProvider>
               {children}
               <SpeedInsights />
               <Analytics />
-            </ToastProvider>
-          </AuthProvider>
+            </AuthProvider>
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import {
   ChevronLeft, Shield, ShieldCheck, Save, Users, KeyRound,
   ScrollText, UserPlus, CheckCircle, Lock, Plus, Ticket, Gamepad2,
-  Printer, History, AlertCircle, Sparkles, XCircle, Calendar,
+  Printer, History, AlertCircle, Sparkles, XCircle, Calendar, Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -58,6 +58,12 @@ const ADMIN_PERMISSION_ITEMS: PermissionItem[] = [
     label: 'View Audit Logs',
     description: 'Allows viewing the system audit log.',
     icon: <ScrollText size={16} />,
+  },
+  {
+    key: 'canManageSessions',
+    label: 'Manage Active Sessions & Security',
+    description: 'Allows complete view and control of system-wide active sessions, devices, and remote session revocation.',
+    icon: <Globe size={16} />,
   },
   {
     key: 'canCreateExhibitions',

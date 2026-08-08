@@ -13,6 +13,7 @@ import { safeErrorMessage } from '@/lib/utils/sanitize';
 import { decryptTotpSecret, verifyTotpCode, verifyRecoveryCode } from '@/lib/utils/totp';
 import { signJwt } from '@/lib/utils/crypto';
 import { AuditService } from '@/lib/services/audit.service';
+import { SessionService } from '@/lib/services/session.service';
 import type { AuthUser } from '@/types/auth.types';
 
 /**
@@ -148,8 +149,17 @@ export const POST = withRateLimit(
         userAgent,
       });
 
-      // 7. Resolve permissions & sign final session token
+      // 7. Resolve permissions & create server-side session
       const permissions = userDoc.role === 'super_admin' ? SUPER_ADMIN_PERMISSIONS : DEFAULT_ADMIN_PERMISSIONS;
+
+      const session = await SessionService.createSession({
+        userId: userDoc._id.toString(),
+        role: userDoc.role,
+        ipAddress,
+        userAgent,
+        loginMethod: 'mfa',
+        durationHours: 8,
+      });
 
       const payload = {
         sub: userDoc._id.toString(),
@@ -157,6 +167,7 @@ export const POST = withRateLimit(
         role: userDoc.role,
         permissions,
         exhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
+        sid: session.sessionId,
       };
 
       const sessionToken = signJwt(payload, secret, '8h');

@@ -28,6 +28,7 @@ export const createStaffSchema = z.object({
     canApproveTicketCancellation: z.boolean().optional(),
     canApproveEntryTicketCancellation: z.boolean().optional(),
     canApproveRideTicketCancellation: z.boolean().optional(),
+    canManageSessions: z.boolean().optional(),
     // Counter operation permissions
     canSellEntryTickets: z.boolean().optional(),
     canViewEntrySales: z.boolean().optional(),
@@ -74,6 +75,7 @@ export const updatePermissionsSchema = z.object({
   canApproveTicketCancellation: z.boolean().optional(),
   canApproveEntryTicketCancellation: z.boolean().optional(),
   canApproveRideTicketCancellation: z.boolean().optional(),
+  canManageSessions: z.boolean().optional(),
   // Counter operation permissions
   canSellEntryTickets: z.boolean().optional(),
   canViewEntrySales: z.boolean().optional(),

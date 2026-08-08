@@ -1,8 +1,10 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import type { AuthUser } from '@/types/auth.types';
 import type { UserPermissionKey } from '@/lib/config/roles';
+import { useToast } from '@/components/providers/toast-provider';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -19,20 +21,38 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const { addToast } = useToast();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Keep a ref of current user to safely check previous auth state during async operations
+  const userRef = useRef<AuthUser | null>(null);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Fetch current session details on mount or reload
   const refreshUser = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch('/api/auth/me', { cache: 'no-store' });
       if (res.ok) {
         const body = await res.json();
         if (body.success && body.data?.user) {
           setUser(body.data.user);
-        } else {
-          setUser(null);
+          return;
         }
+      }
+
+      // If user was previously authenticated and token check failed (e.g. session revoked), force immediate logout
+      if (userRef.current !== null) {
+        setUser(null);
+        addToast({
+          type: 'error',
+          title: 'Session Revoked',
+          message: 'Your active session was terminated or revoked. Please log in again.',
+        });
+        router.push('/login?reason=session_revoked');
       } else {
         setUser(null);
       }
@@ -41,11 +61,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [router, addToast]);
 
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
+
+  // Active Background Session Revocation Check (Polling & Tab Visibility)
+  useEffect(() => {
+    if (!user) return;
+
+    // Check session validity every 10 seconds in background
+    const intervalId = setInterval(() => {
+      refreshUser();
+    }, 10000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshUser();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [user, refreshUser]);
 
   const login = async (staffId: string, password: string) => {
     setIsLoading(true);

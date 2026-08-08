@@ -6,6 +6,7 @@ import {
   Volume2, VolumeX, RefreshCw, Save, ShieldAlert,
   HelpCircle, UserCheck, Key, Shield, Info, Printer, Eye, Sliders,
   QrCode, ShieldCheck, ShieldX, Copy, Check, AlertTriangle, Download, X,
+  Smartphone, Laptop, Globe, LogOut, Trash2, Clock, Search, ShieldCheck as SecurityIcon,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ContentWrapper } from '@/components/layout/content-wrapper';
@@ -19,8 +20,9 @@ import { useAuth } from '@/components/providers/auth-provider';
 import { FormSkeletonBlock } from '@/components/shared/skeletons';
 import { QRDisplay } from '@/components/shared/qr-display';
 import type { IPrintConfig } from '@/lib/db/models/system-settings.model';
+import type { DeviceSession } from '@/types/auth.types';
 
-type ActiveTab = 'profile' | 'system' | 'client';
+type ActiveTab = 'profile' | 'security' | 'system' | 'client';
 
 export default function SettingsPage() {
   const { addToast } = useToast();
@@ -72,6 +74,82 @@ export default function SettingsPage() {
   const [newRecoveryCodes, setNewRecoveryCodes] = React.useState<string[] | null>(null);
   const [regenError, setRegenError] = React.useState('');
   const [copiedRegenCodes, setCopiedRegenCodes] = React.useState(false);
+
+  // Device & Session Management State
+  const [userSessions, setUserSessions] = React.useState<DeviceSession[]>([]);
+  const [systemSessions, setSystemSessions] = React.useState<DeviceSession[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = React.useState(false);
+  const [revokingSessionId, setRevokingSessionId] = React.useState<string | null>(null);
+  const [isRevokingOtherSessions, setIsRevokingOtherSessions] = React.useState(false);
+  const [sessionSearchQuery, setSessionSearchQuery] = React.useState('');
+
+  const fetchUserSessions = React.useCallback(async () => {
+    setIsLoadingSessions(true);
+    try {
+      const res = await fetch('/api/auth/sessions');
+      if (res.ok) {
+        const body = await res.json();
+        if (body.success && Array.isArray(body.data?.sessions)) {
+          setUserSessions(body.data.sessions);
+        }
+      }
+      if (authUser?.role === 'super_admin' || authUser?.permissions?.canManageSessions) {
+        const sysRes = await fetch('/api/admin/sessions');
+        if (sysRes.ok) {
+          const sysBody = await sysRes.json();
+          if (sysBody.success && Array.isArray(sysBody.data?.sessions)) {
+            setSystemSessions(sysBody.data.sessions);
+          }
+        }
+      }
+    } catch {
+      // Ignore error silently
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  }, [authUser?.role, authUser?.permissions?.canManageSessions]);
+
+  const handleRevokeSingleSession = async (sessionId: string) => {
+    setRevokingSessionId(sessionId);
+    try {
+      const res = await fetch(`/api/auth/sessions/${sessionId}/revoke`, { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        throw new Error(body.error?.message || 'Failed to revoke session');
+      }
+      addToast({
+        type: 'success',
+        title: 'Session Revoked',
+        message: 'The selected device session has been invalidated.',
+      });
+      fetchUserSessions();
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Revocation failed', message: err.message });
+    } finally {
+      setRevokingSessionId(null);
+    }
+  };
+
+  const handleRevokeOtherDevices = async () => {
+    setIsRevokingOtherSessions(true);
+    try {
+      const res = await fetch('/api/auth/sessions/revoke-others', { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        throw new Error(body.error?.message || 'Failed to revoke other devices');
+      }
+      addToast({
+        type: 'success',
+        title: 'Logged Out Other Devices',
+        message: body.data?.message || 'All other active sessions have been revoked.',
+      });
+      fetchUserSessions();
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Action failed', message: err.message });
+    } finally {
+      setIsRevokingOtherSessions(false);
+    }
+  };
 
   // System Settings Form State
   const [systemForm, setSystemForm] = React.useState({
@@ -254,6 +332,12 @@ export default function SettingsPage() {
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  React.useEffect(() => {
+    if (activeTab === 'security') {
+      fetchUserSessions();
+    }
+  }, [activeTab, fetchUserSessions]);
 
   // Handle Profile Form Submit
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -602,6 +686,7 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: 'profile', label: 'My Profile', icon: <User size={15} /> },
+    { id: 'security', label: 'Active Sessions & Security', icon: <SecurityIcon size={15} /> },
     ...(authUser?.role === 'super_admin' ? [{ id: 'system', label: 'System Configuration', icon: <Settings size={15} /> }] : []),
     { id: 'client', label: 'Preferences', icon: <Monitor size={15} /> },
   ] as const;
@@ -847,6 +932,247 @@ export default function SettingsPage() {
             )}
           </>
         )}
+
+          {/* SECURITY & SESSIONS TAB */}
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              {/* My Active Sessions Card */}
+              <Card className="border border-gray-800 bg-gray-900/50 shadow-xl">
+                <CardHeader className="border-b border-gray-850 pb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <SecurityIcon size={18} className="text-accent-400" />
+                        <span>Active Device Sessions</span>
+                      </CardTitle>
+                      <CardDescription>
+                        Review devices currently logged into your account. Revoke any unrecognized or old sessions.
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={fetchUserSessions}
+                        isLoading={isLoadingSessions}
+                        leftIcon={<RefreshCw size={14} />}
+                      >
+                        Refresh
+                      </Button>
+                      {userSessions.filter((s) => !s.isCurrentSession && !s.isRevoked).length > 0 && (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={handleRevokeOtherDevices}
+                          isLoading={isRevokingOtherSessions}
+                          leftIcon={<LogOut size={14} />}
+                        >
+                          Logout Other Devices
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-5 space-y-4">
+                  {isLoadingSessions && userSessions.length === 0 ? (
+                    <div className="flex justify-center py-8">
+                      <Spinner size="md" />
+                    </div>
+                  ) : userSessions.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400 bg-gray-950/40 rounded-xl border border-gray-800">
+                      No active sessions found.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      {userSessions.map((session) => {
+                        const isMobile = session.deviceName.toLowerCase().includes('phone') || session.deviceName.toLowerCase().includes('android');
+                        const DeviceIcon = isMobile ? Smartphone : Laptop;
+
+                        return (
+                          <div
+                            key={session.id}
+                            className={`p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                              session.isCurrentSession
+                                ? 'bg-accent-500/10 border-accent-500/40 shadow-sm'
+                                : session.isRevoked
+                                ? 'bg-gray-950/30 border-gray-850 opacity-60'
+                                : 'bg-gray-950/60 border-gray-800 hover:border-gray-700'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3.5">
+                              <div
+                                className={`p-2.5 rounded-lg border shrink-0 ${
+                                  session.isCurrentSession
+                                    ? 'bg-accent-500/20 text-accent-300 border-accent-500/30'
+                                    : 'bg-gray-900 text-gray-400 border-gray-800'
+                                }`}
+                              >
+                                <DeviceIcon size={20} />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm font-bold text-gray-100">
+                                    {session.deviceName} — {session.browserName} {session.browserVersion}
+                                  </span>
+                                  {session.isCurrentSession && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                      This Device
+                                    </span>
+                                  )}
+                                  {session.isRevoked && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                      Revoked
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+                                  <span>OS: {session.osName} {session.osVersion}</span>
+                                  <span>•</span>
+                                  <span>{session.locationLabel}</span>
+                                  {session.ipAddress && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="font-mono">{session.ipAddress}</span>
+                                    </>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-[11px] text-gray-500 pt-0.5">
+                                  <span>Logged in: {new Date(session.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                  <span>•</span>
+                                  <span>Last active: {new Date(session.lastSeenAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {!session.isCurrentSession && !session.isRevoked && (
+                              <div className="shrink-0 flex justify-end">
+                                <Button
+                                  type="button"
+                                  variant="danger"
+                                  size="sm"
+                                  onClick={() => handleRevokeSingleSession(session.sessionId)}
+                                  isLoading={revokingSessionId === session.sessionId}
+                                  leftIcon={<Trash2 size={14} />}
+                                >
+                                  Revoke
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* SYSTEM-WIDE ACTIVE SESSIONS (Super Admin & Authorized Admins) */}
+              {(authUser?.role === 'super_admin' || authUser?.permissions?.canManageSessions) && (
+                <Card className="border border-gray-800 bg-gray-900/50 shadow-xl">
+                  <CardHeader className="border-b border-gray-850 pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Globe size={18} className="text-accent-400" />
+                          <span>System-Wide Active Sessions</span>
+                        </CardTitle>
+                        <CardDescription>
+                          Inspect and manage active sessions across all user accounts in the system.
+                        </CardDescription>
+                      </div>
+                      <div className="w-full sm:w-64">
+                        <Input
+                          placeholder="Search user, staff ID, IP..."
+                          value={sessionSearchQuery}
+                          onChange={(e) => setSessionSearchQuery(e.target.value)}
+                          leftIcon={<Search size={14} />}
+                          className="text-xs"
+                        />
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-5">
+                    {systemSessions.length === 0 ? (
+                      <div className="p-6 text-center text-gray-400 bg-gray-950/40 rounded-xl border border-gray-800">
+                        No active system sessions found.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border border-gray-800">
+                        <table className="w-full text-left text-xs text-gray-300">
+                          <thead className="bg-gray-950/80 text-gray-400 font-semibold uppercase text-[10px] tracking-wider border-b border-gray-800">
+                            <tr>
+                              <th className="p-3">User / Staff ID</th>
+                              <th className="p-3">Role</th>
+                              <th className="p-3">Device & Browser</th>
+                              <th className="p-3">IP Address</th>
+                              <th className="p-3">Last Active</th>
+                              <th className="p-3 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-850 bg-gray-900/40">
+                            {systemSessions
+                              .filter((s) => {
+                                if (!sessionSearchQuery) return true;
+                                const q = sessionSearchQuery.toLowerCase();
+                                return (
+                                  s.userName?.toLowerCase().includes(q) ||
+                                  s.staffId?.toLowerCase().includes(q) ||
+                                  s.deviceName.toLowerCase().includes(q) ||
+                                  s.ipAddress?.toLowerCase().includes(q)
+                                );
+                              })
+                              .map((session) => (
+                                <tr key={session.id} className="hover:bg-gray-850/40 transition-colors">
+                                  <td className="p-3 font-semibold text-gray-100">
+                                    {session.userName}
+                                    <div className="text-[10px] font-mono text-gray-500 uppercase">{session.staffId}</div>
+                                  </td>
+                                  <td className="p-3">
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-gray-800 text-gray-300 border border-gray-700">
+                                      {session.role}
+                                    </span>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="font-semibold text-gray-200">{session.deviceName}</div>
+                                    <div className="text-[10px] text-gray-400">{session.browserName} • {session.osName}</div>
+                                  </td>
+                                  <td className="p-3 font-mono text-gray-400">
+                                    {session.ipAddress || 'Internal'}
+                                  </td>
+                                  <td className="p-3 text-gray-400 whitespace-nowrap">
+                                    {new Date(session.lastSeenAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    {authUser?.role !== 'super_admin' && session.role === 'super_admin' ? (
+                                      <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold text-gray-500 bg-gray-850 border border-gray-800 select-none">
+                                        Protected
+                                      </span>
+                                    ) : (
+                                      <Button
+                                        type="button"
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={() => handleRevokeSingleSession(session.sessionId)}
+                                        isLoading={revokingSessionId === session.sessionId}
+                                        leftIcon={<Trash2 size={13} />}
+                                      >
+                                        Revoke
+                                      </Button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
 
           {/* SYSTEM TAB (Super Admin only) */}
           {activeTab === 'system' && authUser?.role === 'super_admin' && (

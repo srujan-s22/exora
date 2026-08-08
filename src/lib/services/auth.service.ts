@@ -2,6 +2,7 @@ import { User as UserModel } from '@/lib/db/models/user.model';
 import { connectToDatabase } from '@/lib/db/connection';
 import { comparePassword, signJwt } from '@/lib/utils/crypto';
 import { AuditService } from '@/lib/services/audit.service';
+import { SessionService } from '@/lib/services/session.service';
 import { SUPER_ADMIN_PERMISSIONS, DEFAULT_ADMIN_PERMISSIONS, DEFAULT_COUNTER_PERMISSIONS } from '@/lib/config/roles';
 import type { LoginCredentials, AuthUser } from '@/types/auth.types';
 import type { UserPermissionKey } from '@/lib/config/roles';
@@ -118,13 +119,23 @@ export const AuthService = {
       };
     }
 
-    // 6. Generate final session JWT
+    // 6. Create server-side session record & generate final session JWT
+    const session = await SessionService.createSession({
+      userId: userDoc._id.toString(),
+      role: userDoc.role,
+      ipAddress,
+      userAgent,
+      loginMethod: 'credentials',
+      durationHours: 8,
+    });
+
     const payload = {
       sub: userDoc._id.toString(),
       staffId: userDoc.staffId,
       role: userDoc.role,
       permissions,
       exhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
+      sid: session.sessionId,
     };
 
     const token = signJwt(payload, secret, '8h');
@@ -143,7 +154,7 @@ export const AuthService = {
       performedByRole: userDoc.role,
       targetType: 'user',
       targetId: userDoc._id.toString(),
-      details: { staffId },
+      details: { staffId, sessionId: session.sessionId },
       ipAddress,
       userAgent,
     });
@@ -153,6 +164,7 @@ export const AuthService = {
 
   /**
    * Verify an existing JWT token and return the user profile.
+   * Also verifies that the embedded session (sid) is active and not revoked.
    */
   async verifyToken(token: string): Promise<AuthUser | null> {
     try {
@@ -166,6 +178,14 @@ export const AuthService = {
       const decoded = jwt.verify(token, secret) as any;
       if (!decoded || !decoded.sub || decoded.type === 'mfa_pending') {
         return null;
+      }
+
+      // If token contains session ID (sid), verify session is active and not revoked
+      if (decoded.sid) {
+        const sessionStatus = await SessionService.validateSession(decoded.sid);
+        if (!sessionStatus.valid) {
+          return null;
+        }
       }
 
       const userDoc = await UserModel.findById(decoded.sub);

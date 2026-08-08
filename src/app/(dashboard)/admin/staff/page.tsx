@@ -68,6 +68,7 @@ export default function StaffManagementPage() {
       canApproveResets: false,
       canCreateAdmins: false,
       canCreateExhibitions: false,
+      canManageSessions: false,
     }
   });
   const [createErrors, setCreateErrors] = React.useState<Record<string, string>>({});
@@ -218,6 +219,7 @@ export default function StaffManagementPage() {
           canApproveResets: false,
           canCreateAdmins: false,
           canCreateExhibitions: false,
+          canManageSessions: false,
         }
       });
       fetchStaff();
@@ -686,6 +688,18 @@ export default function StaffManagementPage() {
                     className="rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20"
                   />
                   <span>Create Exhibitions</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createForm.permissions.canManageSessions}
+                    onChange={(e) => setCreateForm((p) => ({
+                      ...p,
+                      permissions: { ...p.permissions, canManageSessions: e.target.checked }
+                    }))}
+                    className="rounded border-gray-700 bg-gray-800 text-accent-500 focus:ring-accent-500/20"
+                  />
+                  <span>Manage Active Sessions</span>
                 </label>
               </div>
             </div>

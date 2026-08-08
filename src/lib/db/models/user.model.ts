@@ -13,6 +13,7 @@ export interface IUserPermissions {
   canApproveTicketCancellation: boolean;
   canApproveEntryTicketCancellation: boolean;
   canApproveRideTicketCancellation: boolean;
+  canManageSessions: boolean;
   // Counter operation permissions
   canSellEntryTickets: boolean;
   canViewEntrySales: boolean;
@@ -62,6 +63,7 @@ const PermissionsSchema = new Schema(
     canApproveTicketCancellation: { type: Boolean, default: false },
     canApproveEntryTicketCancellation: { type: Boolean, default: false },
     canApproveRideTicketCancellation: { type: Boolean, default: false },
+    canManageSessions: { type: Boolean, default: false },
     // Counter operation permissions — default true for backward compatibility
     canSellEntryTickets: { type: Boolean, default: true },
     canViewEntrySales: { type: Boolean, default: true },
@@ -125,6 +127,7 @@ const UserSchema = new Schema<IUser>(
         canApproveTicketCancellation: false,
         canApproveEntryTicketCancellation: false,
         canApproveRideTicketCancellation: false,
+        canManageSessions: false,
         canSellEntryTickets: true,
         canViewEntrySales: true,
         canReprintEntryTickets: true,

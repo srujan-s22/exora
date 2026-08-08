@@ -30,6 +30,12 @@ function LoginFormContent() {
 
   const redirectUrl = searchParams.get('redirect') || '/';
 
+  React.useEffect(() => {
+    if (searchParams.get('reason') === 'session_revoked') {
+      setError('Your active session was terminated or revoked by an administrator. Please log in again.');
+    }
+  }, [searchParams]);
+
   // If already logged in, redirect
   React.useEffect(() => {
     if (user) {

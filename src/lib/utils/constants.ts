@@ -93,9 +93,13 @@ export const AUDIT_ACTIONS = [
   'user.mfa_recovery_codes_regenerated',
   'user.mfa_enable_failed',
   'user.mfa_disable_failed',
+  'session.created',
+  'session.revoked',
+  'session.revoked_all',
+  'session.logout_other_devices',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 // ── Audit Target Types ──
-export const AUDIT_TARGET_TYPES = ['user', 'exhibition', 'ticket', 'sale', 'ride_sale', 'settings', 'password_reset', 'cancellation_request'] as const;
+export const AUDIT_TARGET_TYPES = ['user', 'exhibition', 'ticket', 'sale', 'ride_sale', 'settings', 'password_reset', 'cancellation_request', 'session'] as const;
 export type AuditTargetType = (typeof AUDIT_TARGET_TYPES)[number];
