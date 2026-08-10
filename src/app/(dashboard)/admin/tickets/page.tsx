@@ -183,10 +183,10 @@ export default function AdminTicketsPage() {
       ),
     },
     {
-      key: 'price',
-      label: 'Price',
+      key: 'quantity',
+      label: 'Tickets Purchased',
       render: (_val, row) => (
-        <span className="text-gray-300 font-mono text-xs">{formatPrice(row.price)}</span>
+        <span className="text-gray-300 font-mono text-xs text-center block font-semibold">{row.quantity || 1}</span>
       ),
     },
     {

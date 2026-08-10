@@ -319,9 +319,8 @@ export default function AdminRidesPage() {
                 <tr className="border-b border-gray-800 bg-gray-950 text-xs font-semibold text-gray-400 uppercase">
                   <th className="py-4 px-5">Ride / Game</th>
                   <th className="py-4 px-5">Status</th>
-                  <th className="py-4 px-5 text-right">Price</th>
+                  <th className="py-4 px-5 text-center">Tickets Purchased</th>
                   <th className="py-4 px-5">Staff Assigned</th>
-                  <th className="py-4 px-5 text-center">Tickets Sold</th>
                   <th className="py-4 px-5 text-center">Revenue</th>
                   <th className="py-4 px-5 text-center">Valid entries</th>
                   <th className="py-4 px-5 text-right">Actions</th>
@@ -355,8 +354,8 @@ export default function AdminRidesPage() {
                           <span className="capitalize">{ride.status}</span>
                         </span>
                       </td>
-                      <td className="py-4.5 px-5 text-right font-mono font-bold text-gray-200">
-                        ₹{(ride.price / 100).toFixed(2)}
+                      <td className="py-4.5 px-5 text-center font-mono font-bold text-gray-200">
+                        {rideStats.ticketsSold}
                       </td>
                       <td className="py-4.5 px-5">
                         {ride.assignedStaff && ride.assignedStaff.length > 0 ? (
@@ -373,9 +372,6 @@ export default function AdminRidesPage() {
                             No staff assigned
                           </span>
                         )}
-                      </td>
-                      <td className="py-4.5 px-5 text-center font-mono font-semibold text-gray-250">
-                        {rideStats.ticketsSold}
                       </td>
                       <td className="py-4.5 px-5 text-center font-mono font-bold text-success">
                         ₹{(rideStats.totalRevenue / 100).toFixed(2)}

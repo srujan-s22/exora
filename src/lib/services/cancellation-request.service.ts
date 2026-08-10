@@ -9,6 +9,7 @@ import { User } from '@/lib/db/models/user.model';
 import { SystemSettings } from '@/lib/db/models/system-settings.model';
 import { AuditService } from '@/lib/services/audit.service';
 import { NotificationService } from '@/lib/services/notification.service';
+import { hasExhibitionAccess, applyExhibitionScopeQuery, requireExhibitionAccess } from '@/lib/utils/exhibition-scope';
 import type { AuthUser } from '@/types/auth.types';
 
 export interface CreateCancellationRequestData {
@@ -140,18 +141,36 @@ export class CancellationRequestService {
       },
     });
 
-    // Notify eligible Admin users
+    // Notify eligible Admin users assigned to this exhibition with cancellation approval permission on
     try {
-      const eligibleAdmins = await User.find({
+      const targetExhibitionId = saleDoc.exhibitionId ? saleDoc.exhibitionId.toString() : null;
+
+      const candidateAdmins = await User.find({
         role: { $in: ['super_admin', 'admin'] },
         isActive: true,
-        $or: [
-          { role: 'super_admin' },
-          { 'permissions.canApproveTicketCancellation': true },
-          { 'permissions.canApproveEntryTicketCancellation': true },
-          { 'permissions.canApproveRideTicketCancellation': true },
-        ],
-      }).select('_id');
+      }).select('_id role permissions exhibitionAccessMode assignedExhibitions');
+
+      const eligibleAdmins = candidateAdmins.filter((adminDoc) => {
+        // 1. Must be assigned to the exhibition from which cancellation request is sent
+        if (targetExhibitionId && !hasExhibitionAccess(adminDoc, targetExhibitionId)) {
+          return false;
+        }
+
+        // 2. Super admins always have approval authority
+        if (adminDoc.role === 'super_admin') {
+          return true;
+        }
+
+        // 3. Admin must have cancellation approval permission set to on
+        const perms = adminDoc.permissions;
+        if (!perms) return false;
+
+        if (perms.canApproveTicketCancellation) return true;
+        if (isRide && perms.canApproveRideTicketCancellation) return true;
+        if (!isRide && perms.canApproveEntryTicketCancellation) return true;
+
+        return false;
+      });
 
       if (eligibleAdmins.length > 0) {
         const adminUserIds = eligibleAdmins.map((a) => a._id.toString());
@@ -175,14 +194,14 @@ export class CancellationRequestService {
   /**
    * List cancellation requests for Admin queue.
    */
-  static async listRequests(query: ListCancellationRequestsQuery) {
+  static async listRequests(query: ListCancellationRequestsQuery, user?: AuthUser) {
     await connectToDatabase();
 
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
 
-    const filter: Record<string, any> = {};
+    let filter: Record<string, any> = {};
 
     if (query.status && query.status !== 'ALL') {
       filter.status = query.status;
@@ -194,6 +213,10 @@ export class CancellationRequestService {
 
     if (query.exhibitionId) {
       filter.exhibitionId = new mongoose.Types.ObjectId(query.exhibitionId);
+    }
+
+    if (user) {
+      filter = applyExhibitionScopeQuery(user, filter, 'exhibitionId');
     }
 
     const [docs, total] = await Promise.all([
@@ -266,6 +289,10 @@ export class CancellationRequestService {
     const request = await CancellationRequest.findById(requestId);
     if (!request) {
       throw new Error('Cancellation request not found');
+    }
+
+    if (request.exhibitionId) {
+      requireExhibitionAccess(adminUser, request.exhibitionId);
     }
 
     if (request.status !== 'PENDING') {
@@ -377,6 +404,10 @@ export class CancellationRequestService {
     const request = await CancellationRequest.findById(requestId);
     if (!request) {
       throw new Error('Cancellation request not found');
+    }
+
+    if (request.exhibitionId) {
+      requireExhibitionAccess(adminUser, request.exhibitionId);
     }
 
     if (request.status !== 'PENDING') {

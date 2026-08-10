@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('VALIDATION_ERROR', parseResult.error.issues[0]?.message || 'Invalid parameters', 400);
     }
 
-    const result = await CancellationRequestService.listRequests(parseResult.data);
+    const result = await CancellationRequestService.listRequests(parseResult.data, user);
 
     return successResponse(result);
   } catch (error: any) {
