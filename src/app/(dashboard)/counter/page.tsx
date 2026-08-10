@@ -55,9 +55,9 @@ export default function CounterDashboardPage() {
   }, [user, authLoading, router]);
 
   // Load Dashboard Data
-  const loadDashboardData = React.useCallback(async () => {
+  const loadDashboardData = React.useCallback(async (silent = false) => {
     try {
-      setDataLoading(true);
+      if (!silent) setDataLoading(true);
       const res = await fetch('/api/dashboard/counter');
       if (res.ok) {
         const body = await res.json();
@@ -67,27 +67,31 @@ export default function CounterDashboardPage() {
           setStats(body.data.stats);
           setRecentSales(body.data.recentSales || []);
 
-          // Auto select first exhibition if available
+          // Auto select first exhibition if not already selected
           if (exhs.length > 0) {
-            setSelectedExhId(exhs[0].id);
+            setSelectedExhId((prev) => prev || exhs[0].id);
           }
         }
       } else {
-        addToast({
-          type: 'error',
-          title: 'Error Loading Dashboard',
-          message: 'Could not fetch active terminal data from server.',
-        });
+        if (!silent) {
+          addToast({
+            type: 'error',
+            title: 'Error Loading Dashboard',
+            message: 'Could not fetch active terminal data from server.',
+          });
+        }
       }
     } catch (err) {
       console.error(err);
-      addToast({
-        type: 'error',
-        title: 'Network Error',
-        message: 'Could not connect to the server.',
-      });
+      if (!silent) {
+        addToast({
+          type: 'error',
+          title: 'Network Error',
+          message: 'Could not connect to the server.',
+        });
+      }
     } finally {
-      setDataLoading(false);
+      if (!silent) setDataLoading(false);
     }
   }, [addToast]);
 
@@ -95,7 +99,7 @@ export default function CounterDashboardPage() {
     if (user && (user.role === 'counter' || user.role === 'admin')) {
       loadDashboardData();
     }
-  }, [user, loadDashboardData]);
+  }, [user?.id, loadDashboardData]);
 
   // Auto select correct type on exhibition change
   React.useEffect(() => {
@@ -201,8 +205,8 @@ export default function CounterDashboardPage() {
         setNotes('');
         setQuantity('');
 
-        // Refresh stats and logs
-        loadDashboardData();
+        // Refresh stats and logs silently without unmounting modal
+        loadDashboardData(true);
       } else {
         addToast({
           type: 'error',
@@ -331,7 +335,7 @@ export default function CounterDashboardPage() {
           <p className="text-sm text-gray-400 mb-6">
             Your staff account is currently not assigned to any active exhibitions. Please contact your system administrator to assign you to a shift.
           </p>
-          <Button variant="secondary" onClick={loadDashboardData}>
+          <Button variant="secondary" onClick={() => loadDashboardData()}>
             Refresh Desk
           </Button>
         </div>

@@ -139,10 +139,10 @@ export const RideService = {
     return doc ? (doc.toJSON() as unknown as Ride) : null;
   },
 
-  async list(params: { exhibitionId?: string; status?: string; search?: string }): Promise<Ride[]> {
+  async list(params: { exhibitionId?: string; status?: string; search?: string }, user?: any): Promise<Ride[]> {
     await connectToDatabase();
 
-    const query: Record<string, any> = { isActive: true };
+    let query: Record<string, any> = { isActive: true };
 
     if (params.exhibitionId) {
       query.exhibitionId = new mongoose.Types.ObjectId(params.exhibitionId);
@@ -153,6 +153,9 @@ export const RideService = {
     if (params.search) {
       query.name = { $regex: escapeRegex(params.search), $options: 'i' };
     }
+
+    const { applyExhibitionScopeQuery } = require('@/lib/utils/exhibition-scope');
+    query = applyExhibitionScopeQuery(user, query, 'exhibitionId');
 
     const docs = await RideModel.find(query).populate('assignedStaff', 'name staffId');
     return docs.map((d: any) => d.toJSON() as unknown as Ride);
@@ -708,19 +711,22 @@ export const RideService = {
     exhibitionId?: string;
     scannedBy?: string;
     result?: string;
-  }): Promise<{ data: RideScan[]; pagination: PaginationMeta }> {
+  }, user?: any): Promise<{ data: RideScan[]; pagination: PaginationMeta }> {
     await connectToDatabase();
 
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
-    const query: Record<string, any> = {};
+    let query: Record<string, any> = {};
 
     if (params.rideId) query.rideId = new mongoose.Types.ObjectId(params.rideId);
     if (params.exhibitionId) query.exhibitionId = new mongoose.Types.ObjectId(params.exhibitionId);
     if (params.scannedBy) query.scannedBy = new mongoose.Types.ObjectId(params.scannedBy);
     if (params.result) query.result = params.result;
+
+    const { applyExhibitionScopeQuery } = require('@/lib/utils/exhibition-scope');
+    query = applyExhibitionScopeQuery(user, query, 'exhibitionId');
 
     const total = await RideScanModel.countDocuments(query);
     const docs = await RideScanModel.find(query)
@@ -756,18 +762,21 @@ export const RideService = {
     rideId?: string;
     exhibitionId?: string;
     soldBy?: string;
-  }): Promise<{ data: RideSale[]; pagination: PaginationMeta }> {
+  }, user?: any): Promise<{ data: RideSale[]; pagination: PaginationMeta }> {
     await connectToDatabase();
 
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
-    const query: Record<string, any> = {};
+    let query: Record<string, any> = {};
 
     if (params.rideId) query.rideId = new mongoose.Types.ObjectId(params.rideId);
     if (params.exhibitionId) query.exhibitionId = new mongoose.Types.ObjectId(params.exhibitionId);
     if (params.soldBy) query.soldBy = new mongoose.Types.ObjectId(params.soldBy);
+
+    const { applyExhibitionScopeQuery } = require('@/lib/utils/exhibition-scope');
+    query = applyExhibitionScopeQuery(user, query, 'exhibitionId');
 
     const total = await RideSaleModel.countDocuments(query);
     const docs = await RideSaleModel.find(query)

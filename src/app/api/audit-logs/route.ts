@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
       exhibitionId,
       startDate,
       endDate,
-    });
+    }, user);
 
     return successResponse(result);
   } catch (error: any) {

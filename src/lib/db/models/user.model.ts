@@ -34,6 +34,7 @@ export interface IUser extends Document {
   role: UserRoleType;
   permissions: IUserPermissions;
   assignedExhibitions: mongoose.Types.ObjectId[];
+  exhibitionAccessMode?: 'GENERAL' | 'SELECTED';
   isActive: boolean;
   lastLoginAt?: Date;
   lastLoginIp?: string;
@@ -138,10 +139,18 @@ const UserSchema = new Schema<IUser>(
         canCancelRideTickets: true,
       }),
     },
-    assignedExhibitions: [{
-      type: Schema.Types.ObjectId,
-      ref: 'Exhibition',
-    }],
+    assignedExhibitions: {
+      type: [{
+        type: Schema.Types.ObjectId,
+        ref: 'Exhibition',
+      }],
+      default: [],
+    },
+    exhibitionAccessMode: {
+      type: String,
+      enum: ['GENERAL', 'SELECTED'],
+      default: 'GENERAL',
+    },
     isActive: {
       type: Boolean,
       default: true,

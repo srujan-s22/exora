@@ -9,6 +9,7 @@ export interface Staff {
   role: UserRoleType;
   permissions?: Record<UserPermissionKey, boolean>;
   assignedExhibitions: string[];
+  exhibitionAccessMode?: 'GENERAL' | 'SELECTED';
   isActive: boolean;
   lastLoginAt?: Date;
   lastLoginIp?: string;
@@ -25,6 +26,7 @@ export interface CreateStaffInput {
   password: string;
   permissions?: Partial<Record<UserPermissionKey, boolean>>;
   assignedExhibitions?: string[];
+  exhibitionAccessMode?: 'GENERAL' | 'SELECTED';
   superAdminSecret?: string;
 }
 
@@ -36,6 +38,7 @@ export interface UpdateStaffInput {
   password?: string;
   permissions?: Partial<Record<UserPermissionKey, boolean>>;
   assignedExhibitions?: string[];
+  exhibitionAccessMode?: 'GENERAL' | 'SELECTED';
   isActive?: boolean;
   superAdminSecret?: string;
 }

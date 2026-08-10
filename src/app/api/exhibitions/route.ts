@@ -38,8 +38,8 @@ export async function GET(req: NextRequest) {
       search,
       status,
       category,
-      includeArchived: user.role === 'admin' ? includeArchived : false,
-    });
+      includeArchived: user.role === 'admin' || user.role === 'super_admin' ? includeArchived : false,
+    }, user);
 
     return successResponse(result);
   } catch (error: any) {

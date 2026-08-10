@@ -34,12 +34,15 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get('startDate') || undefined;
     const endDate = searchParams.get('endDate') || undefined;
 
-    const data = await AnalyticsService.getAnalyticsData({
-      exhibitionId,
-      dateRange,
-      startDate,
-      endDate,
-    });
+    const data = await AnalyticsService.getAnalyticsData(
+      {
+        exhibitionId,
+        dateRange,
+        startDate,
+        endDate,
+      },
+      user
+    );
 
     return successResponse(data);
   } catch (error: any) {

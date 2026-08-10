@@ -5,6 +5,7 @@ import { TicketScan as TicketScanModel } from '@/lib/db/models/ticket-scan.model
 import { Ticket as TicketModel } from '@/lib/db/models/ticket.model';
 import { User as UserModel } from '@/lib/db/models/user.model';
 import { Exhibition as ExhibitionModel } from '@/lib/db/models/exhibition.model';
+import { applyExhibitionScopeQuery } from '@/lib/utils/exhibition-scope';
 
 export interface AnalyticsQueryOptions {
   exhibitionId?: string;
@@ -14,7 +15,7 @@ export interface AnalyticsQueryOptions {
 }
 
 export class AnalyticsService {
-  static async getAnalyticsData(options: AnalyticsQueryOptions = {}) {
+  static async getAnalyticsData(options: AnalyticsQueryOptions = {}, currentUser?: any) {
     await connectToDatabase();
 
     const { exhibitionId, dateRange = '7d', startDate, endDate } = options;
@@ -56,26 +57,26 @@ export class AnalyticsService {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
-    // 2. Base Mongo Match Filters
-    const saleMatch: Record<string, any> = {
+    // 2. Base Mongo Match Filters with Exhibition Scope
+    let saleMatch: Record<string, any> = applyExhibitionScopeQuery(currentUser, {
       status: { $ne: 'cancelled' },
       soldAt: { $gte: start, $lte: end },
-    };
+    }, 'exhibitionId');
 
-    const scanMatch: Record<string, any> = {
+    let scanMatch: Record<string, any> = applyExhibitionScopeQuery(currentUser, {
       scannedAt: { $gte: start, $lte: end },
-    };
+    }, 'exhibitionId');
 
-    const ticketMatch: Record<string, any> = {
+    let ticketMatch: Record<string, any> = applyExhibitionScopeQuery(currentUser, {
       status: { $ne: 'cancelled' },
       createdAt: { $gte: start, $lte: end },
-    };
+    }, 'exhibitionId');
 
     if (exhibitionId && exhibitionId.trim() !== '' && exhibitionId !== 'all') {
       const exhObjId = new mongoose.Types.ObjectId(exhibitionId);
-      saleMatch.exhibitionId = exhObjId;
-      scanMatch.exhibitionId = exhObjId;
-      ticketMatch.exhibitionId = exhObjId;
+      saleMatch = applyExhibitionScopeQuery(currentUser, { ...saleMatch, exhibitionId: exhObjId }, 'exhibitionId');
+      scanMatch = applyExhibitionScopeQuery(currentUser, { ...scanMatch, exhibitionId: exhObjId }, 'exhibitionId');
+      ticketMatch = applyExhibitionScopeQuery(currentUser, { ...ticketMatch, exhibitionId: exhObjId }, 'exhibitionId');
     }
 
     // 3. Aggregate Top KPI Cards

@@ -6,13 +6,45 @@ import { Exhibition as ExhibitionModel } from '@/lib/db/models/exhibition.model'
 import { User as UserModel } from '@/lib/db/models/user.model';
 import { connectToDatabase } from '@/lib/db/connection';
 
+import { getUserExhibitionScope, applyExhibitionScopeQuery } from '@/lib/utils/exhibition-scope';
+
 /**
  * Dashboard metrics service.
  * Aggregates data across collections for admin, counter, and gate displays.
  */
 export const DashboardService = {
-  async getAdminMetrics(): Promise<Record<string, any>> {
+  async getAdminMetrics(user?: any): Promise<Record<string, any>> {
     await connectToDatabase();
+
+    const scope = getUserExhibitionScope(user);
+    if (!scope.isGlobal && scope.allowedExhibitionIds.length === 0) {
+      return {
+        noExhibitionsAssigned: true,
+        stats: {
+          totalRevenue: 0,
+          ticketsSold: 0,
+          validEntries: 0,
+          invalidScans: 0,
+          duplicateBlocks: 0,
+          wrongExhibitions: 0,
+          forgedAttempts: 0,
+          todayRevenue: 0,
+          todayTickets: 0,
+          yesterdayRevenue: 0,
+          activeExhibitionsCount: 0,
+          staffCount: 0,
+        },
+        paymentBreakdown: {
+          cashRevenue: 0,
+          upiRevenue: 0,
+          cashTickets: 0,
+          upiTickets: 0,
+        },
+        exhibitionBreakdown: [],
+        recentSales: [],
+        recentScans: [],
+      };
+    }
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -21,6 +53,11 @@ export const DashboardService = {
 
     const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
     const endOfYesterday = new Date(endOfToday.getTime() - 24 * 60 * 60 * 1000);
+
+    const saleScopeMatch = applyExhibitionScopeQuery(user, {}, 'exhibitionId');
+    const scanScopeMatch = applyExhibitionScopeQuery(user, {}, 'exhibitionId');
+    const exhibitionScopeMatch = applyExhibitionScopeQuery(user, { archive: { $ne: true } }, '_id');
+    const exhibitionActiveScopeMatch = applyExhibitionScopeQuery(user, { status: 'active', archive: { $ne: true } }, '_id');
 
     // Run independent top-level aggregations and queries concurrently in parallel
     const [
@@ -37,6 +74,7 @@ export const DashboardService = {
     ] = await Promise.all([
       // 1. All-time Sales Aggregation (Active + Cancelled + Cash/UPI breakdown)
       SaleModel.aggregate([
+        { $match: saleScopeMatch },
         {
           $group: {
             _id: null,
@@ -94,6 +132,7 @@ export const DashboardService = {
 
       // 2. All-time Ticket Scans Aggregation
       TicketScanModel.aggregate([
+        { $match: scanScopeMatch },
         {
           $group: {
             _id: null,
@@ -118,7 +157,7 @@ export const DashboardService = {
 
       // 3a. Today Sales Aggregation
       SaleModel.aggregate([
-        { $match: { soldAt: { $gte: startOfToday, $lte: endOfToday }, status: { $ne: 'cancelled' } } },
+        { $match: { ...saleScopeMatch, soldAt: { $gte: startOfToday, $lte: endOfToday }, status: { $ne: 'cancelled' } } },
         {
           $group: {
             _id: null,
@@ -130,7 +169,7 @@ export const DashboardService = {
 
       // 3b. Yesterday Sales Aggregation
       SaleModel.aggregate([
-        { $match: { soldAt: { $gte: startOfYesterday, $lte: endOfYesterday }, status: { $ne: 'cancelled' } } },
+        { $match: { ...saleScopeMatch, soldAt: { $gte: startOfYesterday, $lte: endOfYesterday }, status: { $ne: 'cancelled' } } },
         {
           $group: {
             _id: null,
@@ -141,7 +180,7 @@ export const DashboardService = {
 
       // 3c. Today Scans Aggregation
       TicketScanModel.aggregate([
-        { $match: { scannedAt: { $gte: startOfToday, $lte: endOfToday } } },
+        { $match: { ...scanScopeMatch, scannedAt: { $gte: startOfToday, $lte: endOfToday } } },
         {
           $group: {
             _id: null,
@@ -157,23 +196,23 @@ export const DashboardService = {
       ]),
 
       // 4. Entity Counts
-      ExhibitionModel.countDocuments({ status: 'active', archive: { $ne: true } }),
+      ExhibitionModel.countDocuments(exhibitionActiveScopeMatch),
       UserModel.countDocuments({ role: { $ne: 'admin' }, isActive: true }),
 
       // 5. All Exhibitions for breakdown
-      ExhibitionModel.find({ archive: { $ne: true } })
+      ExhibitionModel.find(exhibitionScopeMatch)
         .sort({ createdAt: -1, _id: -1 })
         .lean(),
 
       // 6. Recent feeds
-      SaleModel.find({})
+      SaleModel.find(saleScopeMatch)
         .sort({ soldAt: -1, _id: -1 })
         .limit(6)
         .populate('soldBy', 'name staffId')
         .populate('exhibitionId', 'name')
         .lean(),
 
-      TicketScanModel.find({})
+      TicketScanModel.find(scanScopeMatch)
         .sort({ scannedAt: -1, _id: -1 })
         .limit(6)
         .populate('scannedBy', 'name staffId')

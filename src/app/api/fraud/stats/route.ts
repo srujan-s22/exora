@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'Access denied: Administrators only.', 403);
     }
 
-    const data = await FraudService.getOverviewMetrics();
+    const data = await FraudService.getOverviewMetrics(user);
     return successResponse(data);
   } catch (error: any) {
     logger.error('Error in GET /api/fraud/stats:', error);

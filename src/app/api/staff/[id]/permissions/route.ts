@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import mongoose from 'mongoose';
 import { AuthService } from '@/lib/services/auth.service';
 import { StaffService } from '@/lib/services/staff.service';
+import { ExhibitionService } from '@/lib/services/exhibition.service';
 import { AuditService } from '@/lib/services/audit.service';
 import { connectToDatabase } from '@/lib/db/connection';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
@@ -67,9 +68,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     const previousPermissions = { ...currentStaff.permissions };
+    const { exhibitionAccessMode, assignedExhibitions, ...permissionData } = parsed.data;
 
-    // Update permissions
-    const updated = await StaffService.updatePermissions(id, parsed.data);
+    // Update permissions and exhibition scope
+    const updated = await StaffService.updatePermissions(id, permissionData, {
+      exhibitionAccessMode,
+      assignedExhibitions,
+    });
     if (!updated) {
       return errorResponse('NOT_FOUND', 'Staff member not found', 404);
     }
@@ -94,6 +99,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         previousPermissions,
         updatedPermissions: updated.permissions,
         newPermissions: updated.permissions,
+        exhibitionAccessMode: updated.exhibitionAccessMode,
+        assignedExhibitions: updated.assignedExhibitions,
         changedFields: parsed.data,
       },
       ipAddress,
@@ -117,6 +124,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
     await connectToDatabase();
+    await ExhibitionService.syncExhibitionStatuses();
 
     const cookieStore = await cookies();
     const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
@@ -148,6 +156,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
       name: staff.name,
       role: staff.role,
       permissions: staff.permissions,
+      exhibitionAccessMode: staff.exhibitionAccessMode || 'GENERAL',
+      assignedExhibitions: staff.assignedExhibitions || [],
     });
   } catch (error: any) {
     logger.error('Error in GET /api/staff/[id]/permissions:', error);

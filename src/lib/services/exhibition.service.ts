@@ -64,46 +64,83 @@ export const ExhibitionService = {
   },
 
   /**
-   * Automatically updates any active/upcoming exhibitions in the database whose end date has passed to 'completed'.
+   * Rechecks and synchronizes status of all non-archived exhibitions in the database based on current time.
+   * Automatically sets expired exhibitions to 'completed' and reactivates extended exhibitions to 'active'.
    */
-  async autoCompleteExpiredExhibitions(): Promise<void> {
+  async syncExhibitionStatuses(): Promise<void> {
     try {
+      await connectToDatabase();
       const now = new Date();
+
+      // 1. Mark expired exhibitions as 'completed'
       await ExhibitionModel.updateMany(
         {
-          status: { $nin: ['completed', 'closed', 'archived'] },
+          status: { $nin: ['completed', 'closed', 'archived', 'paused'] },
           endDate: { $lt: now },
         },
         {
           $set: { status: 'completed' },
         }
       );
+
+      // 2. Reactivate exhibitions whose date range is now valid (e.g. extended end date)
+      await ExhibitionModel.updateMany(
+        {
+          status: 'completed',
+          archive: { $ne: true },
+          startDate: { $lte: now },
+          endDate: { $gte: now },
+        },
+        {
+          $set: { status: 'active' },
+          $unset: { manualEndReason: "" }
+        }
+      );
+
+      // 3. Activate upcoming exhibitions whose start date has arrived
+      await ExhibitionModel.updateMany(
+        {
+          status: 'upcoming',
+          archive: { $ne: true },
+          startDate: { $lte: now },
+          endDate: { $gte: now },
+        },
+        {
+          $set: { status: 'active' },
+        }
+      );
     } catch (err) {
-      console.error('Failed to auto-complete expired exhibitions:', err);
+      console.error('Failed to sync exhibition statuses:', err);
     }
+  },
+
+  /**
+   * Automatically updates any active/upcoming exhibitions in the database whose end date has passed to 'completed'.
+   */
+  async autoCompleteExpiredExhibitions(): Promise<void> {
+    await this.syncExhibitionStatuses();
   },
 
   async findById(id: string): Promise<Exhibition | null> {
     await connectToDatabase();
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
-    await this.autoCompleteExpiredExhibitions();
+    await this.syncExhibitionStatuses();
     const doc = await ExhibitionModel.findById(id).populate('assignedStaffIds', 'name staffId role');
     if (!doc) return null;
-    if (Date.now() > new Date(doc.endDate).getTime() && doc.status !== 'archived') {
-      doc.status = 'completed';
+    const effectiveStatus = this.getEffectiveStatus(doc);
+    if (doc.status !== effectiveStatus && doc.status !== 'archived' && doc.status !== 'closed' && doc.status !== 'paused') {
+      doc.status = effectiveStatus as any;
     }
-    return doc.toJSON() as unknown as Exhibition;
+    return { ...doc.toJSON(), status: effectiveStatus } as unknown as Exhibition;
   },
 
   async findBySlug(slug: string): Promise<Exhibition | null> {
     await connectToDatabase();
-    await this.autoCompleteExpiredExhibitions();
+    await this.syncExhibitionStatuses();
     const doc = await ExhibitionModel.findOne({ slug: slug.toLowerCase() });
     if (!doc) return null;
-    if (Date.now() > new Date(doc.endDate).getTime() && doc.status !== 'archived') {
-      doc.status = 'completed';
-    }
-    return doc.toJSON() as unknown as Exhibition;
+    const effectiveStatus = this.getEffectiveStatus(doc);
+    return { ...doc.toJSON(), status: effectiveStatus } as unknown as Exhibition;
   },
 
   async update(id: string, data: UpdateExhibitionInput, userId: string): Promise<Exhibition | null> {
@@ -143,7 +180,17 @@ export const ExhibitionService = {
     if (data.startDate !== undefined) doc.startDate = new Date(data.startDate);
     if (data.endDate !== undefined) doc.endDate = new Date(data.endDate);
     if (data.ticketTypes !== undefined) doc.ticketTypes = data.ticketTypes as any;
-    if (data.status !== undefined) doc.status = data.status;
+    if (data.status !== undefined) {
+      doc.status = data.status;
+    } else if (data.endDate !== undefined || data.startDate !== undefined) {
+      const nowMs = Date.now();
+      const startMs = new Date(doc.startDate).getTime();
+      const endMs = new Date(doc.endDate).getTime();
+      if ((doc.status === 'completed' || doc.status === 'upcoming') && nowMs >= startMs && nowMs <= endMs) {
+        doc.status = 'active';
+        (doc as any).manualEndReason = undefined;
+      }
+    }
     if (data.settings !== undefined) doc.settings = { ...doc.settings, ...data.settings };
     if (data.entryFee !== undefined) doc.entryFee = data.entryFee;
     if (data.capacity !== undefined) doc.capacity = data.capacity;
@@ -188,7 +235,7 @@ export const ExhibitionService = {
         performedByRole: 'admin',
         targetType: 'exhibition',
         targetId: doc._id.toString(),
-        details: { prevStatus, newStatus: data.status, name: doc.name },
+        details: { prevStatus, newStatus: doc.status, name: doc.name },
       });
     }
 
@@ -203,18 +250,18 @@ export const ExhibitionService = {
     });
 
     await doc.populate('assignedStaffIds', 'name staffId role');
-    return doc.toJSON() as unknown as Exhibition;
+    return { ...doc.toJSON(), status: this.getEffectiveStatus(doc) } as unknown as Exhibition;
   },
 
-  async list(params: PaginationParams & { status?: string; search?: string; category?: string; includeArchived?: boolean }): Promise<{ data: Exhibition[]; pagination: PaginationMeta }> {
+  async list(params: PaginationParams & { status?: string; search?: string; category?: string; includeArchived?: boolean }, user?: any): Promise<{ data: Exhibition[]; pagination: PaginationMeta }> {
     await connectToDatabase();
-    await this.autoCompleteExpiredExhibitions();
+    await this.syncExhibitionStatuses();
 
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
-    const query: Record<string, any> = {};
+    let query: Record<string, any> = {};
 
     // Filter archived collections
     if (!params.includeArchived) {
@@ -234,6 +281,10 @@ export const ExhibitionService = {
       query.name = { $regex: escapeRegex(params.search), $options: 'i' };
     }
 
+    // Apply exhibition scope query filter
+    const { applyExhibitionScopeQuery } = require('@/lib/utils/exhibition-scope');
+    query = applyExhibitionScopeQuery(user, query, '_id');
+
     const total = await ExhibitionModel.countDocuments(query);
     const docs = await ExhibitionModel.find(query)
       .sort({ createdAt: -1, _id: -1 })
@@ -241,14 +292,11 @@ export const ExhibitionService = {
       .limit(limit)
       .lean();
 
-    const nowMs = Date.now();
     const data = await Promise.all(
       docs.map(async (doc: any) => {
         const docIdStr = doc._id.toString();
         const stats = await ExhibitionService.getStats(docIdStr);
-        const effectiveStatus = (nowMs > new Date(doc.endDate).getTime() && doc.status !== 'archived')
-          ? 'completed'
-          : doc.status;
+        const effectiveStatus = this.getEffectiveStatus(doc);
         return {
           ...doc,
           id: docIdStr,
@@ -558,7 +606,19 @@ export const ExhibitionService = {
       endDate: { $gte: now },
     };
     if (userRole !== 'admin' && userRole !== 'super_admin') {
-      query.assignedStaffIds = new mongoose.Types.ObjectId(userId);
+      const user = await UserModel.findById(userId).select('assignedExhibitions').lean();
+      const assignedFromUser = (user?.assignedExhibitions || [])
+        .map((e: any) => (typeof e === 'object' && e !== null ? (e._id ? e._id.toString() : e.id?.toString() || String(e)) : String(e)))
+        .filter((id: string) => id && mongoose.Types.ObjectId.isValid(id));
+
+      const userObjId = new mongoose.Types.ObjectId(userId);
+      const orConditions: any[] = [{ assignedStaffIds: userObjId }];
+
+      if (assignedFromUser.length > 0) {
+        orConditions.push({ _id: { $in: assignedFromUser.map((id: string) => new mongoose.Types.ObjectId(id)) } });
+      }
+
+      query.$or = orConditions;
     }
     const docs = await ExhibitionModel.find(query)
       .sort({ name: 1, _id: 1 })

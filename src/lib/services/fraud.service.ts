@@ -9,20 +9,24 @@ import { connectToDatabase } from '@/lib/db/connection';
 import type { RiskLevel, FraudOverview, ReconciliationRow, StaffRiskProfile, ExhibitionRiskProfile, TicketForensics } from '@/types/fraud.types';
 import type { Sale } from '@/types/sale.types';
 
+import { applyExhibitionScopeQuery } from '@/lib/utils/exhibition-scope';
+
 export const FraudService = {
   /**
    * Fetch aggregate counts for the fraud dashboard overview.
    */
-  async getOverviewMetrics(): Promise<FraudOverview & { suspiciousIncidents: any[]; securityViolationsCount: number }> {
+  async getOverviewMetrics(currentUser?: any): Promise<FraudOverview & { suspiciousIncidents: any[]; securityViolationsCount: number }> {
     await connectToDatabase();
 
-    const totalScans = await TicketScanModel.countDocuments({});
-    const admittedScans = await TicketScanModel.find({ result: 'admitted' });
+    const scanScopeQuery = applyExhibitionScopeQuery(currentUser, {}, 'exhibitionId');
+
+    const totalScans = await TicketScanModel.countDocuments(scanScopeQuery);
+    const admittedScans = await TicketScanModel.find({ ...scanScopeQuery, result: 'admitted' });
     const validScans = admittedScans.reduce((sum, sc) => sum + (sc.admittedCount || 1), 0);
-    const duplicateScans = await TicketScanModel.countDocuments({ result: 'rejected_used' });
-    const wrongExhibitionScans = await TicketScanModel.countDocuments({ result: 'rejected_wrong_exhibition' });
-    const forgedAttempts = await TicketScanModel.countDocuments({ result: 'rejected_unknown' });
-    const invalidScans = await TicketScanModel.countDocuments({ result: { $regex: /^rejected_/ } });
+    const duplicateScans = await TicketScanModel.countDocuments({ ...scanScopeQuery, result: 'rejected_used' });
+    const wrongExhibitionScans = await TicketScanModel.countDocuments({ ...scanScopeQuery, result: 'rejected_wrong_exhibition' });
+    const forgedAttempts = await TicketScanModel.countDocuments({ ...scanScopeQuery, result: 'rejected_unknown' });
+    const invalidScans = await TicketScanModel.countDocuments({ ...scanScopeQuery, result: { $regex: /^rejected_/ } });
 
     // Count security violations (unauthorized password reset attempts on super admins)
     const securityViolationsCount = await AuditLogModel.countDocuments({
@@ -34,7 +38,7 @@ export const FraudService = {
     const activeAlertsCount = duplicateScans + forgedAttempts + wrongExhibitionScans + securityViolationsCount;
 
     // Get 15 recent suspicious scan incidents
-    const suspiciousScans = await TicketScanModel.find({ result: { $ne: 'admitted' } })
+    const suspiciousScans = await TicketScanModel.find({ ...scanScopeQuery, result: { $ne: 'admitted' } })
       .sort({ scannedAt: -1, _id: -1 })
       .limit(15)
       .populate('scannedBy', 'name staffId')

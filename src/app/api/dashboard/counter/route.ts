@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       soldBy: !isAdminOrSuper ? user.id : undefined,
       startDate: startOfToday,
       endDate: endOfToday,
-    });
+    }, user);
 
     return successResponse({
       user,

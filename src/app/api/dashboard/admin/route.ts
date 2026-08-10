@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'Access denied: Administrators only.', 403);
     }
 
-    const metrics = await DashboardService.getAdminMetrics();
+    const metrics = await DashboardService.getAdminMetrics(user);
 
     return successResponse(metrics);
   } catch (error: any) {

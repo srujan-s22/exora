@@ -11,6 +11,7 @@ import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { updateStaffSchema } from '@/lib/validators/staff.schema';
 import { hashPassword, timingSafeStringEqual } from '@/lib/utils/crypto';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
+import { getUserExhibitionScope, hasExhibitionAccess } from '@/lib/utils/exhibition-scope';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -39,12 +40,26 @@ export async function GET(req: NextRequest, context: RouteContext) {
     }
 
     const staff = await UserModel.findById(id)
-      .select('name staffId phoneNumber email role permissions isActive assignedExhibitions lastLoginAt lastLoginIp createdBy createdAt updatedAt')
+      .select('name staffId phoneNumber email role permissions isActive assignedExhibitions exhibitionAccessMode lastLoginAt lastLoginIp createdBy createdAt updatedAt')
       .populate('assignedExhibitions', 'name status')
       .populate('createdBy', 'name staffId');
 
     if (!staff) {
       return errorResponse('NOT_FOUND', 'Staff member not found', 404);
+    }
+
+    // Exhibition Scope enforcement for non-global Admins
+    if (currentUser.role === 'admin') {
+      const scope = getUserExhibitionScope(currentUser);
+      if (!scope.isGlobal) {
+        const staffExhIds = (staff.assignedExhibitions || []).map((e: any) =>
+          typeof e === 'object' && e !== null ? (e._id ? e._id.toString() : e.id?.toString() || String(e)) : String(e)
+        );
+        const hasMatchingExhibition = staffExhIds.some((exhId: string) => scope.allowedExhibitionIds.includes(exhId));
+        if (!hasMatchingExhibition) {
+          return errorResponse('FORBIDDEN', 'Access denied: Staff member belongs to an unassigned exhibition scope.', 403);
+        }
+      }
     }
 
     // Fetch recent audit logs for this user
@@ -101,6 +116,30 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const staff = await UserModel.findById(id).select('+passwordHash');
     if (!staff) {
       return errorResponse('NOT_FOUND', 'Staff member not found', 404);
+    }
+
+    // Exhibition Scope enforcement for non-global Admins
+    if (currentUser.role === 'admin') {
+      const scope = getUserExhibitionScope(currentUser);
+      if (!scope.isGlobal) {
+        const staffExhIds = (staff.assignedExhibitions || []).map((e: any) => e.toString());
+        const hasMatchingExhibition = staffExhIds.some((exhId: string) => scope.allowedExhibitionIds.includes(exhId));
+        if (!hasMatchingExhibition) {
+          return errorResponse('FORBIDDEN', 'Access denied: Staff member belongs to an unassigned exhibition scope.', 403);
+        }
+
+        if (parsed.data.assignedExhibitions && parsed.data.assignedExhibitions.length > 0) {
+          for (const exhId of parsed.data.assignedExhibitions) {
+            if (!scope.allowedExhibitionIds.includes(exhId)) {
+              return errorResponse(
+                'FORBIDDEN',
+                'You can only assign staff members to exhibitions inside your assigned exhibition scope.',
+                403
+              );
+            }
+          }
+        }
+      }
     }
 
     // ── Admin-to-admin protection ──
@@ -271,6 +310,18 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
 
     if (!staff.isActive) {
       return errorResponse('ALREADY_INACTIVE', 'Staff member is already deactivated', 400);
+    }
+
+    // Exhibition Scope enforcement for non-global Admins
+    if (currentUser.role === 'admin') {
+      const scope = getUserExhibitionScope(currentUser);
+      if (!scope.isGlobal) {
+        const staffExhIds = (staff.assignedExhibitions || []).map((e: any) => e.toString());
+        const hasMatchingExhibition = staffExhIds.some((exhId: string) => scope.allowedExhibitionIds.includes(exhId));
+        if (!hasMatchingExhibition) {
+          return errorResponse('FORBIDDEN', 'Access denied: Staff member belongs to an unassigned exhibition scope.', 403);
+        }
+      }
     }
 
     // ── Admin-to-admin protection ──

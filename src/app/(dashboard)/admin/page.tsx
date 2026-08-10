@@ -213,6 +213,30 @@ export default function AdminDashboardPage() {
   // Render inline custom premium charts
   const upiPercent = metrics ? (metrics.upiRevenue / ((metrics.upiRevenue + metrics.cashRevenue) || 1)) * 100 : 50;
 
+  if (!isLoading && dashboardData?.noExhibitionsAssigned) {
+    return (
+      <ContentWrapper>
+        <PageHeader
+          title="Admin Dashboard"
+          description="Overview of ticket sales, gate entries, system security, and staff activity."
+          showDivider
+        />
+        <div className="flex flex-col items-center justify-center p-12 text-center rounded-2xl border border-amber-500/20 bg-gray-900 shadow-lg max-w-2xl mx-auto my-12 space-y-4">
+          <div className="p-4 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+            <AlertTriangle size={36} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-100">Exhibition Not Assigned</h2>
+          <p className="text-sm text-gray-400 max-w-md leading-relaxed">
+            No exhibitions have been assigned to your admin account yet. You are currently restricted from viewing operational data.
+          </p>
+          <p className="text-xs text-gray-500 bg-gray-850 px-4 py-2 rounded-lg border border-gray-800">
+            Please contact your Super Admin to assign specific exhibitions or grant General Scope access.
+          </p>
+        </div>
+      </ContentWrapper>
+    );
+  }
+
   return (
     <ContentWrapper>
       {/* Page Header */}

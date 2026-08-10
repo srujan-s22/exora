@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status') || undefined;
     const search = searchParams.get('search') || undefined;
 
-    const result = await RideService.list({ exhibitionId, status, search });
+    const result = await RideService.list({ exhibitionId, status, search }, user);
     return successResponse(result);
   } catch (error: any) {
     logger.error('Error in GET /api/rides:', error);

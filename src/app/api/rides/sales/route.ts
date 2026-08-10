@@ -34,7 +34,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const rideId = searchParams.get('rideId') || undefined;
     const exhibitionId = searchParams.get('exhibitionId') || undefined;
-    const soldBy = user.role !== 'admin' && user.role !== 'super_admin' ? user.id : (searchParams.get('soldBy') || undefined);
+    const soldBy = (user.role === 'admin' || user.role === 'super_admin')
+      ? (searchParams.get('soldBy') || undefined)
+      : user.id;
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
 
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
       soldBy,
       page,
       limit,
-    });
+    }, user);
 
     return successResponse(data);
   } catch (error: any) {

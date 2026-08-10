@@ -12,6 +12,8 @@ import { AuditService } from '@/lib/services/audit.service';
 import { escapeRegex, safeErrorMessage } from '@/lib/utils/sanitize';
 import { timingSafeStringEqual } from '@/lib/utils/crypto';
 
+import { getUserExhibitionScope, applyExhibitionScopeQuery, hasExhibitionAccess } from '@/lib/utils/exhibition-scope';
+
 /**
  * GET /api/staff
  * Retrieve a paginated, filterable list of staff members. Super admin and admin only.
@@ -38,7 +40,7 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)));
     const skip = (page - 1) * limit;
 
-    const query: Record<string, any> = {};
+    let query: Record<string, any> = {};
 
     // Role filter
     if (role) {
@@ -61,6 +63,9 @@ export async function GET(req: NextRequest) {
         { phoneNumber: { $regex: safeSearch, $options: 'i' } },
       ];
     }
+
+    // Enforce exhibition access scope for non-global Admin users
+    query = applyExhibitionScopeQuery(user, query, 'assignedExhibitions');
 
     const [total, staff] = await Promise.all([
       UserModel.countDocuments(query),
@@ -171,8 +176,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Sanitize permissions if created by a regular admin
+    // Staff assignment boundary check for non-global admins
     if (currentUser.role === 'admin') {
+      const scope = getUserExhibitionScope(currentUser);
+      if (!scope.isGlobal && parsed.data.assignedExhibitions && parsed.data.assignedExhibitions.length > 0) {
+        for (const exhId of parsed.data.assignedExhibitions) {
+          if (!hasExhibitionAccess(currentUser, exhId)) {
+            return errorResponse(
+              'FORBIDDEN',
+              'You can only assign staff members to exhibitions inside your assigned exhibition scope.',
+              403
+            );
+          }
+        }
+      }
+
+      // Sanitize permissions if created by a regular admin
       parsed.data.permissions = {
         canCreateUsers: false,
         canResetPasswords: false,

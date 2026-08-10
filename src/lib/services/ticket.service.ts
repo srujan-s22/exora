@@ -700,7 +700,8 @@ export const TicketService = {
 
   async listByExhibition(
     exhibitionId: string,
-    params: PaginationParams & { search?: string; status?: string; ticketType?: string; startDate?: string; endDate?: string }
+    params: PaginationParams & { search?: string; status?: string; ticketType?: string; startDate?: string; endDate?: string },
+    user?: any
   ): Promise<{ data: Ticket[]; pagination: PaginationMeta; stats: { totalTickets: number; totalRevenue: number; validCount: number; usedCount: number } }> {
     await connectToDatabase();
 
@@ -708,7 +709,7 @@ export const TicketService = {
     const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
-    const query: Record<string, any> = {};
+    let query: Record<string, any> = {};
     if (exhibitionId) {
       query.exhibitionId = new mongoose.Types.ObjectId(exhibitionId);
     }
@@ -743,6 +744,9 @@ export const TicketService = {
         { customerPhone: { $regex: safeSearch, $options: 'i' } },
       ];
     }
+
+    const { applyExhibitionScopeQuery } = require('@/lib/utils/exhibition-scope');
+    query = applyExhibitionScopeQuery(user, query, 'exhibitionId');
 
     const total = await TicketModel.countDocuments(query);
     const docs = await TicketModel.find(query)

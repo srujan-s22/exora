@@ -40,6 +40,7 @@ export const createStaffSchema = z.object({
     canCancelRideTickets: z.boolean().optional(),
   }).optional(),
   assignedExhibitions: z.array(z.string()).optional(),
+  exhibitionAccessMode: z.enum(['GENERAL', 'SELECTED']).optional(),
   superAdminSecret: z.string().optional(),
 });
 
@@ -59,6 +60,7 @@ export const updateStaffSchema = z.object({
     .regex(/[0-9]/)
     .optional(),
   assignedExhibitions: z.array(z.string()).optional(),
+  exhibitionAccessMode: z.enum(['GENERAL', 'SELECTED']).optional(),
   isActive: z.boolean().optional(),
   superAdminSecret: z.string().optional(),
 });
@@ -85,6 +87,9 @@ export const updatePermissionsSchema = z.object({
   canViewRideSales: z.boolean().optional(),
   canReprintRideTickets: z.boolean().optional(),
   canCancelRideTickets: z.boolean().optional(),
+  // Exhibition scope updates
+  exhibitionAccessMode: z.enum(['GENERAL', 'SELECTED']).optional(),
+  assignedExhibitions: z.array(z.string()).optional(),
 });
 
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;

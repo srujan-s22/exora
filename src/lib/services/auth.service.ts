@@ -47,7 +47,7 @@ export const AuthService = {
 
     // Field Projection: select only fields required for authentication & token generation
     const userDoc = await UserModel.findOne({ staffId })
-      .select('staffId name role permissions isActive assignedExhibitions totpEnabled +passwordHash');
+      .select('staffId name role permissions isActive assignedExhibitions exhibitionAccessMode totpEnabled +passwordHash');
 
     // Security Note: Constant-time authentication mitigation.
     // If the staff ID does not exist, run a dummy bcrypt comparison so the execution duration
@@ -94,7 +94,8 @@ export const AuthService = {
       name: userDoc.name,
       role: userDoc.role,
       permissions,
-      assignedExhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
+      assignedExhibitions: (userDoc.assignedExhibitions || []).map((id: any) => id.toString()),
+      exhibitionAccessMode: userDoc.exhibitionAccessMode || 'GENERAL',
       isActive: userDoc.isActive,
     };
 
@@ -134,7 +135,8 @@ export const AuthService = {
       staffId: userDoc.staffId,
       role: userDoc.role,
       permissions,
-      exhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
+      exhibitions: (userDoc.assignedExhibitions || []).map((id: any) => id.toString()),
+      exhibitionAccessMode: userDoc.exhibitionAccessMode || 'GENERAL',
       sid: session.sessionId,
     };
 
@@ -201,7 +203,8 @@ export const AuthService = {
         name: userDoc.name,
         role: userDoc.role,
         permissions,
-        assignedExhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
+        assignedExhibitions: (userDoc.assignedExhibitions || []).map((id: any) => id.toString()),
+        exhibitionAccessMode: userDoc.exhibitionAccessMode || 'GENERAL',
         isActive: userDoc.isActive,
       };
     } catch {
@@ -228,7 +231,8 @@ export const AuthService = {
       name: userDoc.name,
       role: userDoc.role,
       permissions,
-      assignedExhibitions: userDoc.assignedExhibitions.map((id: any) => id.toString()),
+      assignedExhibitions: (userDoc.assignedExhibitions || []).map((id: any) => id.toString()),
+      exhibitionAccessMode: userDoc.exhibitionAccessMode || 'GENERAL',
       isActive: userDoc.isActive,
     };
   },

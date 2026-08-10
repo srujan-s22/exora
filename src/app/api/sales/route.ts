@@ -42,16 +42,21 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)));
 
-    // Counter staff is scoped to their own sales
-    const soldBy = user.role !== 'admin' ? user.id : (searchParams.get('soldBy') || undefined);
+    // Counter staff is scoped to their own sales; Admins and Super Admins can filter by soldBy
+    const soldBy = (user.role === 'admin' || user.role === 'super_admin')
+      ? (searchParams.get('soldBy') || undefined)
+      : user.id;
 
-    const result = await SaleService.list({
-      page,
-      limit,
-      exhibitionId,
-      soldBy,
-      paymentMethod,
-    });
+    const result = await SaleService.list(
+      {
+        page,
+        limit,
+        exhibitionId,
+        soldBy,
+        paymentMethod,
+      },
+      user
+    );
 
     return successResponse(result);
   } catch (error: any) {

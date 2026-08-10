@@ -289,8 +289,17 @@ export default function SalesHistoryPage() {
       const res = await fetch('/api/dashboard/counter');
       if (res.ok) {
         const body = await res.json();
-        if (body.success) {
-          setExhibitions(body.data.activeExhibitions || []);
+        if (body.success && Array.isArray(body.data?.activeExhibitions) && body.data.activeExhibitions.length > 0) {
+          setExhibitions(body.data.activeExhibitions);
+          return;
+        }
+      }
+      const exhRes = await fetch('/api/exhibitions?limit=100');
+      if (exhRes.ok) {
+        const exhBody = await exhRes.json();
+        if (exhBody.success) {
+          const list = Array.isArray(exhBody.data?.data) ? exhBody.data.data : (Array.isArray(exhBody.data) ? exhBody.data : []);
+          setExhibitions(list);
         }
       }
     } catch (err) {
@@ -299,9 +308,9 @@ export default function SalesHistoryPage() {
   }, []);
 
   // Load sales history
-  const loadSalesHistory = React.useCallback(async () => {
+  const loadSalesHistory = React.useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const queryParams = new URLSearchParams({
         page: page.toString(),
         limit: '10',
@@ -315,25 +324,29 @@ export default function SalesHistoryPage() {
         const body = await res.json();
         if (body.success) {
           setSales(body.data.data || []);
-          setTotalPages(body.data.pagination.totalPages || 1);
-          setTotalItems(body.data.pagination.total || 0);
+          setTotalPages(body.data.pagination?.totalPages || 1);
+          setTotalItems(body.data.pagination?.total || 0);
         }
       } else {
-        addToast({
-          type: 'error',
-          title: 'Error Loading History',
-          message: 'Failed to fetch sales history logs.',
-        });
+        if (!silent) {
+          addToast({
+            type: 'error',
+            title: 'Error Loading History',
+            message: 'Failed to fetch sales history logs.',
+          });
+        }
       }
     } catch (err) {
       console.error(err);
-      addToast({
-        type: 'error',
-        title: 'Network Error',
-        message: 'Could not connect to server.',
-      });
+      if (!silent) {
+        addToast({
+          type: 'error',
+          title: 'Network Error',
+          message: 'Could not connect to server.',
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [page, exhibitionId, paymentMethod, saleType, addToast]);
 
@@ -342,7 +355,7 @@ export default function SalesHistoryPage() {
       loadExhibitions();
       loadSalesHistory();
     }
-  }, [user, page, exhibitionId, paymentMethod, saleType, loadExhibitions, loadSalesHistory]);
+  }, [user?.id, page, exhibitionId, paymentMethod, saleType, loadExhibitions, loadSalesHistory]);
 
   const handleReprint = async (sale: any) => {
     if (!sale.tickets || sale.tickets.length === 0) {
@@ -567,7 +580,7 @@ export default function SalesHistoryPage() {
         <div className="flex-1" />
         <Button
           variant="secondary"
-          onClick={loadSalesHistory}
+          onClick={() => loadSalesHistory()}
           leftIcon={<RefreshCw size={14} />}
           isLoading={loading}
         >

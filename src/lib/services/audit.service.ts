@@ -4,6 +4,7 @@ import type { AuditLog, CreateAuditLogInput } from '@/types/audit.types';
 import type { PaginationParams, PaginationMeta } from '@/types/api.types';
 import mongoose from 'mongoose';
 import { logger } from '@/lib/utils/logger';
+import { applyExhibitionScopeQuery } from '@/lib/utils/exhibition-scope';
 
 /**
  * Audit logging service.
@@ -63,14 +64,14 @@ export const AuditService = {
     exhibitionId?: string;
     startDate?: Date;
     endDate?: Date;
-  }): Promise<{ data: AuditLog[]; pagination: PaginationMeta }> {
+  }, user?: any): Promise<{ data: AuditLog[]; pagination: PaginationMeta }> {
     await connectToDatabase();
     
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
-    const query: any = {};
+    let query: any = {};
 
     if (params.action) query.action = params.action;
     if (params.performedBy) query.performedBy = new mongoose.Types.ObjectId(params.performedBy);
@@ -82,6 +83,8 @@ export const AuditService = {
       if (params.startDate) query.timestamp.$gte = params.startDate;
       if (params.endDate) query.timestamp.$lte = params.endDate;
     }
+
+    query = applyExhibitionScopeQuery(user, query, 'exhibitionId');
 
     const total = await AuditLogModel.countDocuments(query);
     const logs = await AuditLogModel.find(query)

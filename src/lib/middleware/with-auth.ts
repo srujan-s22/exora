@@ -70,15 +70,19 @@ export function withAuth(handler: AuthenticatedHandler) {
       const authenticatedReq = req as AuthenticatedRequest;
       authenticatedReq.user = payload;
 
-      // Re-hydrate permissions from DB for Admin role so permission changes apply in real-time
-      if (payload.role === 'admin' && payload.sub) {
+      // Re-hydrate permissions and exhibition scope from DB so changes apply in real-time
+      if (payload.sub && (payload.role === 'admin' || payload.role === 'counter' || payload.role === 'gate' || payload.role === 'ride')) {
         await connectToDatabase();
-        const freshUser = await UserModel.findById(payload.sub).select('permissions role isActive').lean();
+        const freshUser = await UserModel.findById(payload.sub)
+          .select('permissions role isActive exhibitionAccessMode assignedExhibitions')
+          .lean();
         if (freshUser) {
           if (!freshUser.isActive) {
             return errorResponse('UNAUTHORIZED', 'Account is deactivated', 401);
           }
           authenticatedReq.user.permissions = resolvePermissions(freshUser.role, freshUser.permissions as any);
+          authenticatedReq.user.exhibitionAccessMode = freshUser.exhibitionAccessMode || 'GENERAL';
+          authenticatedReq.user.exhibitions = (freshUser.assignedExhibitions || []).map((id: any) => id.toString());
         }
       }
 

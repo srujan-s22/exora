@@ -39,7 +39,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const body = await res.json();
         if (body.success && body.data?.user) {
-          setUser(body.data.user);
+          const newUser = body.data.user;
+          setUser((prev) => {
+            if (prev && JSON.stringify(prev) === JSON.stringify(newUser)) {
+              return prev;
+            }
+            return newUser;
+          });
           return;
         }
       }

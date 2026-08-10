@@ -56,7 +56,7 @@ export default function SellTicketsPage() {
   // Load exhibitions
   const loadExhibitions = React.useCallback(async () => {
     try {
-      setDataLoading(true);
+      if (activeExhibitions.length === 0) setDataLoading(true);
       const res = await fetch('/api/dashboard/counter');
       if (res.ok) {
         const body = await res.json();
@@ -64,7 +64,7 @@ export default function SellTicketsPage() {
           const exhs = body.data.activeExhibitions || [];
           setActiveExhibitions(exhs);
           if (exhs.length > 0) {
-            setSelectedExhId(exhs[0].id);
+            setSelectedExhId((prev) => prev || exhs[0].id);
           }
         }
       }
@@ -73,13 +73,13 @@ export default function SellTicketsPage() {
     } finally {
       setDataLoading(false);
     }
-  }, []);
+  }, [activeExhibitions.length]);
 
   React.useEffect(() => {
     if (user && (user.role === 'counter' || user.role === 'admin')) {
       loadExhibitions();
     }
-  }, [user, loadExhibitions]);
+  }, [user?.id, loadExhibitions]);
 
   // Auto select correct type on exhibition change
   React.useEffect(() => {

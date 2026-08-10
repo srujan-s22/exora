@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       result,
       page,
       limit,
-    });
+    }, user);
 
     return successResponse(data);
   } catch (error: any) {

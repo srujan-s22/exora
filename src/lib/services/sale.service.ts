@@ -4,6 +4,8 @@ import mongoose from 'mongoose';
 import { Sale as SaleModel } from '@/lib/db/models/sale.model';
 import { connectToDatabase } from '@/lib/db/connection';
 
+import { applyExhibitionScopeQuery } from '@/lib/utils/exhibition-scope';
+
 /**
  * Sales service.
  * Handles sales recording and analytics.
@@ -16,7 +18,8 @@ export const SaleService = {
       paymentMethod?: string;
       startDate?: Date;
       endDate?: Date;
-    }
+    },
+    user?: any
   ): Promise<{ data: Sale[]; pagination: PaginationMeta }> {
     await connectToDatabase();
 
@@ -24,7 +27,7 @@ export const SaleService = {
     const limit = Math.min(Math.max(1, params.limit || 20), 100);
     const skip = (page - 1) * limit;
 
-    const query: Record<string, any> = {};
+    let query: Record<string, any> = {};
 
     if (params.exhibitionId) {
       query.exhibitionId = new mongoose.Types.ObjectId(params.exhibitionId);
@@ -44,6 +47,8 @@ export const SaleService = {
         query.soldAt.$lte = params.endDate;
       }
     }
+
+    query = applyExhibitionScopeQuery(user, query, 'exhibitionId');
 
     const total = await SaleModel.countDocuments(query);
     const docs = await SaleModel.find(query)
@@ -73,16 +78,18 @@ export const SaleService = {
     };
   },
 
-  async getStats(exhibitionId?: string, dateRange?: { start: Date; end: Date }): Promise<SaleStats> {
+  async getStats(exhibitionId?: string, dateRange?: { start: Date; end: Date }, user?: any): Promise<SaleStats> {
     await connectToDatabase();
 
-    const match: Record<string, any> = { status: { $ne: 'cancelled' } };
+    let match: Record<string, any> = { status: { $ne: 'cancelled' } };
     if (exhibitionId) {
       match.exhibitionId = new mongoose.Types.ObjectId(exhibitionId);
     }
     if (dateRange) {
       match.soldAt = { $gte: dateRange.start, $lte: dateRange.end };
     }
+
+    match = applyExhibitionScopeQuery(user, match, 'exhibitionId');
 
     const sales = await SaleModel.find(match)
       .select('totalAmount ticketCount paymentMethod')

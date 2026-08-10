@@ -133,6 +133,7 @@ export const StaffService = {
       role: data.role,
       permissions,
       assignedExhibitions: data.assignedExhibitions || [],
+      exhibitionAccessMode: data.exhibitionAccessMode || 'GENERAL',
       isActive: true,
       passwordUpdatedAt: new Date(),
       createdBy,
@@ -140,7 +141,7 @@ export const StaffService = {
 
     // Return without password
     const created = await UserModel.findById(newUser._id)
-      .select('name staffId phoneNumber email role permissions isActive assignedExhibitions createdBy createdAt updatedAt')
+      .select('name staffId phoneNumber email role permissions isActive assignedExhibitions exhibitionAccessMode createdBy createdAt updatedAt')
       .populate('assignedExhibitions', 'name');
 
     return this._toStaff(created!);
@@ -149,7 +150,7 @@ export const StaffService = {
   async findById(id: string): Promise<Staff | null> {
     await connectToDatabase();
     const user = await UserModel.findById(id)
-      .select('name staffId phoneNumber email role permissions assignedExhibitions isActive lastLoginAt createdBy createdAt updatedAt');
+      .select('name staffId phoneNumber email role permissions assignedExhibitions exhibitionAccessMode isActive lastLoginAt createdBy createdAt updatedAt');
 
     if (!user) return null;
     return this._toStaff(user);
@@ -166,6 +167,7 @@ export const StaffService = {
     if (data.email !== undefined) user.email = data.email || (undefined as any);
     if (data.role !== undefined) user.role = data.role;
     if (data.assignedExhibitions !== undefined) user.assignedExhibitions = data.assignedExhibitions as any;
+    if (data.exhibitionAccessMode !== undefined) user.exhibitionAccessMode = data.exhibitionAccessMode;
     if (data.isActive !== undefined) user.isActive = data.isActive;
 
     if (data.password) {
@@ -176,7 +178,7 @@ export const StaffService = {
     await user.save();
 
     const updated = await UserModel.findById(id)
-      .select('name staffId phoneNumber email role permissions assignedExhibitions isActive lastLoginAt createdBy createdAt updatedAt');
+      .select('name staffId phoneNumber email role permissions assignedExhibitions exhibitionAccessMode isActive lastLoginAt createdBy createdAt updatedAt');
 
     return this._toStaff(updated!);
   },
@@ -194,11 +196,12 @@ export const StaffService = {
   },
 
   /**
-   * Update an admin or counter user's permissions.
+   * Update an admin or counter user's permissions and exhibition access scope.
    */
   async updatePermissions(
     id: string,
-    permissions: Partial<Record<UserPermissionKey, boolean>>
+    permissions: Partial<Record<UserPermissionKey, boolean>>,
+    scopeData?: { exhibitionAccessMode?: 'GENERAL' | 'SELECTED'; assignedExhibitions?: string[] }
   ): Promise<Staff | null> {
     await connectToDatabase();
 
@@ -219,10 +222,18 @@ export const StaffService = {
     };
 
     user.permissions = updatedPerms as any;
+
+    if (scopeData?.exhibitionAccessMode !== undefined) {
+      user.exhibitionAccessMode = scopeData.exhibitionAccessMode;
+    }
+    if (scopeData?.assignedExhibitions !== undefined) {
+      user.assignedExhibitions = scopeData.assignedExhibitions as any;
+    }
+
     await user.save();
 
     const updated = await UserModel.findById(id)
-      .select('name staffId phoneNumber email role permissions assignedExhibitions isActive lastLoginAt createdBy createdAt updatedAt');
+      .select('name staffId phoneNumber email role permissions assignedExhibitions exhibitionAccessMode isActive lastLoginAt createdBy createdAt updatedAt');
 
     return this._toStaff(updated!);
   },
@@ -249,7 +260,7 @@ export const StaffService = {
 
     const total = await UserModel.countDocuments(query);
     const users = await UserModel.find(query)
-      .select('name staffId phoneNumber email role permissions isActive assignedExhibitions lastLoginAt createdBy createdAt updatedAt')
+      .select('name staffId phoneNumber email role permissions isActive assignedExhibitions exhibitionAccessMode lastLoginAt createdBy createdAt updatedAt')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -278,6 +289,7 @@ export const StaffService = {
       role: user.role,
       permissions: user.permissions?.toObject?.() || user.permissions,
       assignedExhibitions: user.assignedExhibitions?.map((id: any) => id.toString()) || [],
+      exhibitionAccessMode: user.exhibitionAccessMode || 'GENERAL',
       isActive: user.isActive,
       lastLoginAt: user.lastLoginAt,
       createdBy: user.createdBy?.toString(),

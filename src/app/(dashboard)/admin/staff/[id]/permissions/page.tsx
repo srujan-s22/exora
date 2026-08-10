@@ -155,20 +155,36 @@ export default function PermissionsPage() {
     staffId: string;
     role: string;
     permissions: Record<string, boolean>;
+    exhibitionAccessMode?: 'GENERAL' | 'SELECTED';
+    assignedExhibitions?: any[];
   } | null>(null);
   const [permissions, setPermissions] = React.useState<Record<string, boolean>>({});
+  const [exhibitionAccessMode, setExhibitionAccessMode] = React.useState<'GENERAL' | 'SELECTED'>('GENERAL');
+  const [assignedExhibitions, setAssignedExhibitions] = React.useState<string[]>([]);
+  const [allExhibitions, setAllExhibitions] = React.useState<Array<{ id: string; name: string; status: string }>>([]);
   const [selectedPresetId, setSelectedPresetId] = React.useState<string>('custom');
   const [hasChanges, setHasChanges] = React.useState(false);
 
   React.useEffect(() => {
     async function loadPermissions() {
       try {
-        const res = await fetch(`/api/staff/${id}/permissions`);
-        if (!res.ok) throw new Error('Failed to load permissions');
-        const body = await res.json();
+        const [permRes, exhRes] = await Promise.all([
+          fetch(`/api/staff/${id}/permissions`),
+          fetch('/api/exhibitions?limit=100&includeArchived=true'),
+        ]);
+
+        if (!permRes.ok) throw new Error('Failed to load permissions');
+        const body = await permRes.json();
         if (body.success) {
           setStaffInfo(body.data);
           setPermissions(body.data.permissions || {});
+          setExhibitionAccessMode(body.data.exhibitionAccessMode || 'GENERAL');
+          
+          const rawAssigned = body.data.assignedExhibitions || [];
+          const assignedIds = rawAssigned.map((e: any) =>
+            typeof e === 'object' && e !== null ? (e.id || e._id || String(e)) : String(e)
+          );
+          setAssignedExhibitions(assignedIds);
           
           // Detect matching preset for counter staff
           if (body.data.role === 'counter') {
@@ -181,6 +197,22 @@ export default function PermissionsPage() {
             else if (isRideOnly) setSelectedPresetId('ride_counter');
             else if (isFull) setSelectedPresetId('full_counter');
             else setSelectedPresetId('custom');
+          }
+        }
+
+        if (exhRes.ok) {
+          const exhBody = await exhRes.json();
+          if (exhBody.success) {
+            const rawList = Array.isArray(exhBody.data?.data)
+              ? exhBody.data.data
+              : Array.isArray(exhBody.data)
+              ? exhBody.data
+              : [];
+            setAllExhibitions(rawList.map((e: any) => ({
+              id: e.id || e._id?.toString(),
+              name: e.name,
+              status: e.status,
+            })));
           }
         }
       } catch (err: any) {
@@ -220,13 +252,29 @@ export default function PermissionsPage() {
     }
   };
 
+  const toggleExhibitionAssignment = (exhId: string) => {
+    setAssignedExhibitions((prev) => {
+      const updated = prev.includes(exhId)
+        ? prev.filter((i) => i !== exhId)
+        : [...prev, exhId];
+      setHasChanges(true);
+      return updated;
+    });
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const payload = {
+        ...permissions,
+        exhibitionAccessMode,
+        assignedExhibitions,
+      };
+
       const res = await fetch(`/api/staff/${id}/permissions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(permissions),
+        body: JSON.stringify(payload),
       });
       const body = await res.json();
       if (!res.ok || !body.success) throw new Error(body.error?.message || 'Failed to save');
@@ -234,8 +282,8 @@ export default function PermissionsPage() {
       setHasChanges(false);
       addToast({
         type: 'success',
-        title: 'Permissions Saved',
-        message: `Permissions updated for ${staffInfo?.name || 'staff member'}.`,
+        title: 'Settings Saved',
+        message: `Permissions and exhibition scope updated for ${staffInfo?.name || 'staff member'}.`,
       });
     } catch (err: any) {
       addToast({ type: 'error', title: 'Save Failed', message: err.message });
@@ -339,6 +387,130 @@ export default function PermissionsPage() {
               value: p.id,
             }))}
           />
+        </div>
+      )}
+
+      {/* Exhibition Access Control (Resource Scope) for Admin users */}
+      {isAdmin && isSuperAdmin && (
+        <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Globe size={18} className="text-accent-400" />
+            <div>
+              <h2 className="text-sm font-bold text-gray-200">Exhibition Access Scope</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Control which exhibitions this Admin account can access and manage. Effective access is Role + Permission + Exhibition Scope.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setExhibitionAccessMode('GENERAL');
+                setHasChanges(true);
+              }}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                exhibitionAccessMode === 'GENERAL'
+                  ? 'bg-accent-500/10 border-accent-500/50 text-accent-300 ring-1 ring-accent-500/30'
+                  : 'bg-gray-850 border-gray-800 text-gray-400 hover:border-gray-700'
+              }`}
+            >
+              <div className="font-semibold text-xs text-gray-100 flex items-center gap-1.5">
+                <Globe size={14} className={exhibitionAccessMode === 'GENERAL' ? 'text-accent-400' : 'text-gray-500'} />
+                General Scope (All Exhibitions)
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Admin can view & manage data across all current and future exhibitions according to their permissions.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setExhibitionAccessMode('SELECTED');
+                setHasChanges(true);
+              }}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                exhibitionAccessMode === 'SELECTED'
+                  ? 'bg-accent-500/10 border-accent-500/50 text-accent-300 ring-1 ring-accent-500/30'
+                  : 'bg-gray-850 border-gray-800 text-gray-400 hover:border-gray-700'
+              }`}
+            >
+              <div className="font-semibold text-xs text-gray-100 flex items-center gap-1.5">
+                <Shield size={14} className={exhibitionAccessMode === 'SELECTED' ? 'text-accent-400' : 'text-gray-500'} />
+                Selected Exhibitions Scope
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Admin is strictly restricted to the specific exhibitions assigned below. Unassigned exhibitions are blocked.
+              </p>
+            </button>
+          </div>
+
+          {exhibitionAccessMode === 'SELECTED' && (
+            <div className="pt-3 border-t border-gray-800/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-gray-300">
+                  Assigned Exhibitions ({assignedExhibitions.length} selected)
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignedExhibitions(allExhibitions.map((e) => e.id));
+                      setHasChanges(true);
+                    }}
+                    className="text-[11px] text-accent-400 hover:underline"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-gray-600">|</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignedExhibitions([]);
+                      setHasChanges(true);
+                    }}
+                    className="text-[11px] text-gray-400 hover:underline"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              {allExhibitions.length === 0 ? (
+                <p className="text-xs text-gray-500 italic py-2">No active exhibitions found in system.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                  {allExhibitions.map((exh) => {
+                    const isChecked = assignedExhibitions.includes(exh.id);
+                    return (
+                      <label
+                        key={exh.id}
+                        onClick={() => toggleExhibitionAssignment(exh.id)}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-colors select-none ${
+                          isChecked
+                            ? 'bg-accent-500/10 border-accent-600/40 text-gray-100'
+                            : 'bg-gray-850/50 border-gray-800 text-gray-400 hover:border-gray-700 hover:text-gray-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}} // handled by parent label onClick
+                          className="rounded border-gray-700 bg-gray-900 text-accent-500 focus:ring-accent-500/20"
+                        />
+                        <div className="truncate flex-1">
+                          <span className="font-medium text-gray-200">{exh.name}</span>
+                          <span className="ml-1.5 text-[10px] text-gray-500 uppercase">({exh.status})</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -41,15 +41,19 @@ export async function GET(req: NextRequest) {
       return successResponse(result);
     }
 
-    const result = await TicketService.listByExhibition(exhibitionId, {
-      page,
-      limit,
-      search,
-      status,
-      ticketType,
-      startDate,
-      endDate,
-    });
+    const result = await TicketService.listByExhibition(
+      exhibitionId,
+      {
+        page,
+        limit,
+        search,
+        status,
+        ticketType,
+        startDate,
+        endDate,
+      },
+      user
+    );
 
     return successResponse(result);
   } catch (error: any) {

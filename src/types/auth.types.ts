@@ -6,6 +6,7 @@ export interface JwtPayload {
   role: UserRoleType;
   permissions: Record<UserPermissionKey, boolean>;
   exhibitions: string[];
+  exhibitionAccessMode?: 'GENERAL' | 'SELECTED';
   sid?: string;
   iat: number;
   exp: number;
@@ -23,6 +24,7 @@ export interface AuthUser {
   role: UserRoleType;
   permissions: Record<UserPermissionKey, boolean>;
   assignedExhibitions: string[];
+  exhibitionAccessMode?: 'GENERAL' | 'SELECTED';
   isActive: boolean;
 }
 
