@@ -250,8 +250,13 @@ export class CancellationRequestService {
       })
     );
 
+    let pendingStatsMatch: Record<string, any> = { status: 'PENDING' };
+    if (user) {
+      pendingStatsMatch = applyExhibitionScopeQuery(user, pendingStatsMatch, 'exhibitionId');
+    }
+
     const pendingStats = await CancellationRequest.aggregate([
-      { $match: { status: 'PENDING' } },
+      { $match: pendingStatsMatch },
       {
         $group: {
           _id: null,

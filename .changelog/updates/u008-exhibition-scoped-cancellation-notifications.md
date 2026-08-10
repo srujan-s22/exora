@@ -24,7 +24,7 @@ Updated Exora's ticket cancellation workflow and Admin console UI:
 
 - `src/lib/services/cancellation-request.service.ts`:
   - Updated `createRequest` to filter candidate admins using `hasExhibitionAccess(adminDoc, saleDoc.exhibitionId)` and check ticket cancellation approval permissions (`canApproveTicketCancellation`, `canApproveRideTicketCancellation`, or `canApproveEntryTicketCancellation`).
-  - Updated `listRequests` to accept an optional `user` object and apply `applyExhibitionScopeQuery(user, filter)` for database scoping.
+  - Updated `listRequests` to accept an optional `user` object and apply `applyExhibitionScopeQuery(user, filter)` for database query scoping and summary `pendingStats` (`pendingCount` and `pendingAmount`) card aggregations.
   - Updated `approveRequest` and `rejectRequest` to call `requireExhibitionAccess(adminUser, request.exhibitionId)`.
 
 - `src/app/api/cancellation-requests/route.ts`:
