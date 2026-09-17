@@ -5,6 +5,7 @@ import { ExhibitionService } from '@/lib/services/exhibition.service';
 import { AuthService } from '@/lib/services/auth.service';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
+import { hasExhibitionAccess } from '@/lib/utils/exhibition-scope';
 
 /**
  * GET /api/exhibitions/[id]/stats
@@ -26,6 +27,10 @@ export async function GET(
     }
 
     const { id } = await params;
+    if (!hasExhibitionAccess(user, id)) {
+      return errorResponse('FORBIDDEN', 'Access denied: You are not assigned to this exhibition', 403);
+    }
+
     const stats = await ExhibitionService.getStats(id);
     return successResponse(stats);
   } catch (error: any) {

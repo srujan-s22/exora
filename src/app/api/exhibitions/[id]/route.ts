@@ -8,6 +8,7 @@ import { updateExhibitionSchema } from '@/lib/validators/exhibition.schema';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
 import { hasAdminPermission } from '@/lib/utils/permission-helpers';
+import { hasExhibitionAccess } from '@/lib/utils/exhibition-scope';
 
 /**
  * GET /api/exhibitions/[id]
@@ -29,6 +30,11 @@ export async function GET(
     }
 
     const { id } = await params;
+
+    if (!hasExhibitionAccess(user, id)) {
+      return errorResponse('FORBIDDEN', 'Access denied: You are not assigned to this exhibition', 403);
+    }
+
     const doc = await ExhibitionService.findById(id);
     if (!doc) {
       return errorResponse('NOT_FOUND', 'Exhibition not found', 404);
@@ -65,6 +71,11 @@ export async function PATCH(
     }
 
     const { id } = await params;
+
+    if (!hasExhibitionAccess(user, id)) {
+      return errorResponse('FORBIDDEN', 'Access denied: You are not assigned to this exhibition', 403);
+    }
+
     const body = await req.json();
     const parsed = updateExhibitionSchema.safeParse(body);
     if (!parsed.success) {
@@ -107,6 +118,10 @@ export async function DELETE(
     }
 
     const { id } = await params;
+
+    if (!hasExhibitionAccess(user, id)) {
+      return errorResponse('FORBIDDEN', 'Access denied: You are not assigned to this exhibition', 403);
+    }
 
     // Soft delete/archive the exhibition
     const doc = await ExhibitionService.update(id, { archive: true, status: 'archived' }, user.id);

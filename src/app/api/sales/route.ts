@@ -11,6 +11,7 @@ import { createTicketSchema } from '@/lib/validators/ticket.schema';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
 import { hasCounterPermission } from '@/lib/utils/permission-helpers';
+import { hasExhibitionAccess } from '@/lib/utils/exhibition-scope';
 
 /**
  * GET /api/sales
@@ -107,14 +108,12 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', opCheck.reason || 'Ticket sales are disabled for this exhibition.', 400);
     }
 
-    if (user.role !== 'admin') {
-      const isAssigned = (exhibition.assignedStaffIds || []).some(
-        (staff: any) => staff.id?.toString() === user.id || staff.toString() === user.id
-      ) || user.assignedExhibitions.includes(parsed.data.exhibitionId);
+    const isAssigned = hasExhibitionAccess(user, parsed.data.exhibitionId) || (exhibition.assignedStaffIds || []).some(
+      (staff: any) => staff.id?.toString() === user.id || staff.toString() === user.id
+    );
 
-      if (!isAssigned) {
-        return errorResponse('FORBIDDEN', 'Access denied: You are not assigned to this exhibition counter', 403);
-      }
+    if (!isAssigned) {
+      return errorResponse('FORBIDDEN', 'Access denied: You are not assigned to this exhibition counter', 403);
     }
 
     // Process sale and issue tickets

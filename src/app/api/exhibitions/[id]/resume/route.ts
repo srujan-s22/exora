@@ -8,6 +8,7 @@ import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { AUTH_COOKIE_NAME } from '@/lib/utils/constants';
 import { safeErrorMessage } from '@/lib/utils/sanitize';
 import { hasAdminPermission } from '@/lib/utils/permission-helpers';
+import { hasExhibitionAccess } from '@/lib/utils/exhibition-scope';
 
 /**
  * POST /api/exhibitions/[id]/resume
@@ -37,6 +38,9 @@ export async function POST(
     }
 
     const { id } = await params;
+    if (!hasExhibitionAccess(user, id)) {
+      return errorResponse('FORBIDDEN', 'Access denied: You are not assigned to this exhibition', 403);
+    }
     const body = await req.json().catch(() => ({}));
     const parseResult = resumeExhibitionSchema.safeParse(body);
     const reason = parseResult.success ? parseResult.data.reason : undefined;

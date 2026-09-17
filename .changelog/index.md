@@ -17,4 +17,5 @@ Master index of all completed engineering updates for the **Exora** platform.
 | **[U007](./updates/u007-exhibition-scoped-admin-access.md)** | 2026-08-10 | Exhibition-Scoped Access Control for Admin Users | Implemented | Resource-level authorization: Role + Permission + Exhibition Scope with DB as source of truth, Super Admin UI, and query scoping. |
 | **[U008](./updates/u008-exhibition-scoped-cancellation-notifications.md)** | 2026-08-10 | Exhibition-Scoped Cancellation Notifications & Column Updates | Implemented | Scoped cancellation request notifications & queue to assigned admins, and replaced Price with Tickets Purchased in admin tickets/rides menus. |
 | **[U009](./updates/u009-srs-4.0-specification.md)** | 2026-08-11 | Software Requirements Specification (SRS) 4.0 | Completed | Upgraded and consolidated SRS reference document to version 4.0 incorporating updates U001 through U008. |
+| **[U010](./updates/u010-security-idor-scope-hardening.md)** | 2026-09-17 | Security IDOR Remediation & Counter Sale Scope Hardening | Implemented | Remediated cross-exhibition authorization bypass on /api/exhibitions/[id] routes and restored Super Admin sales scoping. |
 
