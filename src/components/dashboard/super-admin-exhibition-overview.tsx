@@ -4,6 +4,7 @@ import * as React from 'react';
 import { MapPin, Globe, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { StatusIndicator } from '@/components/shared/status-indicator';
 import { ExoraMap, type MapMarker } from '@/components/shared/exora-map';
+import { useAuth } from '@/components/providers/auth-provider';
 import { logger } from '@/lib/utils/logger';
 
 export interface ExhibitionOverviewItem {
@@ -144,7 +145,13 @@ export function SuperAdminExhibitionOverview({
   onSelectExhibition,
   isLoading = false,
 }: SuperAdminExhibitionOverviewProps) {
+  const { isSuperAdmin } = useAuth();
   const cardRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Strict role check: The centralized exhibition map is exclusively for Super Admin
+  if (!isSuperAdmin) {
+    return null;
+  }
 
   // Filter valid geographic markers for ExoraMap
   const validMapMarkers = React.useMemo((): MapMarker[] => {

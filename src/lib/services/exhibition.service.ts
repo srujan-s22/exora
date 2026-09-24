@@ -397,13 +397,22 @@ export const ExhibitionService = {
       .limit(limit)
       .lean();
 
+    const isSuperAdmin = user?.role === 'super_admin';
     const data = await Promise.all(
       docs.map(async (doc: any) => {
         const docIdStr = doc._id.toString();
         const stats = await ExhibitionService.getStats(docIdStr);
         const effectiveStatus = this.getEffectiveStatus(doc);
+        const docObj = { ...doc };
+        if (!isSuperAdmin && docObj.location) {
+          docObj.location = {
+            ...docObj.location,
+            latitude: null,
+            longitude: null,
+          };
+        }
         return {
-          ...doc,
+          ...docObj,
           id: docIdStr,
           status: effectiveStatus,
           ticketCount: stats.ticketsSold,

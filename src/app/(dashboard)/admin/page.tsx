@@ -12,9 +12,11 @@ import { useToast } from '@/components/providers/toast-provider';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { useAuth } from '@/components/providers/auth-provider';
 import { SuperAdminExhibitionOverview } from '@/components/dashboard/super-admin-exhibition-overview';
 
 export default function AdminDashboardPage() {
+  const { isSuperAdmin } = useAuth();
   const { addToast } = useToast();
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
@@ -303,13 +305,15 @@ export default function AdminDashboardPage() {
         showDivider
       />
 
-      {/* ── SUPER ADMIN EXHIBITION OVERVIEW + MAP (STEP 3) ── */}
-      <SuperAdminExhibitionOverview
-        exhibitions={dashboardData?.exhibitionBreakdown || []}
-        selectedExhibitionId={selectedExhibitionId}
-        onSelectExhibition={setSelectedExhibitionId}
-        isLoading={isLoading}
-      />
+      {/* ── SUPER ADMIN EXHIBITION OVERVIEW + MAP (SUPER ADMIN ONLY) ── */}
+      {isSuperAdmin && (
+        <SuperAdminExhibitionOverview
+          exhibitions={dashboardData?.exhibitionBreakdown || []}
+          selectedExhibitionId={selectedExhibitionId}
+          onSelectExhibition={setSelectedExhibitionId}
+          isLoading={isLoading}
+        />
+      )}
 
       {/* Advanced Filter Toolbar */}
       <div className="mb-6 grid gap-4 p-4 rounded-xl border border-gray-800 bg-gray-900 shadow-sm sm:grid-cols-2 lg:grid-cols-3 xl:max-w-4xl">

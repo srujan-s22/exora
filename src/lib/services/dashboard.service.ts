@@ -282,6 +282,7 @@ export const DashboardService = {
     const admittedMap = new Map<string, number>();
     admittedAgg.forEach((a: any) => admittedMap.set(a._id.toString(), a.totalAdmitted));
 
+    const isSuperAdmin = user?.role === 'super_admin';
     const exhibitionBreakdown = allExhibitions.map((exh: any) => {
       const exhIdStr = exh._id.toString();
       const soldCount = ticketCountMap.get(exhIdStr) || 0;
@@ -298,7 +299,8 @@ export const DashboardService = {
         category: exh.category,
         startDate: exh.startDate,
         endDate: exh.endDate,
-        location: exh.location || null,
+        // Centralized exhibition map data (coordinates) is strictly Super Admin only
+        location: isSuperAdmin ? (exh.location || null) : null,
         ticketsSold: soldCount,
         revenue: rev,
         admitted,
