@@ -28,14 +28,45 @@ export interface ExoraMapProps {
 }
 
 let isGoogleMapsConfigured = false;
-function configureGoogleMaps(apiKey: string) {
+function configureGoogleMaps(apiKey: string, mapId?: string) {
   if (!isGoogleMapsConfigured) {
     setOptions({
       key: apiKey,
       v: 'weekly',
+      ...(mapId ? { mapIds: [mapId] } : {}),
     });
     isGoogleMapsConfigured = true;
   }
+}
+
+function createPinElement(): HTMLElement {
+  const pinElement = document.createElement('div');
+  pinElement.className = 'exora-google-marker group cursor-pointer';
+  pinElement.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: center;">
+      <div style="width: 32px; height: 32px; border-radius: 9999px; background: #ffffff; border: 2.5px solid #4f46e5; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); cursor: pointer; transition: transform 0.15s ease-out;">
+        <svg style="width: 16px; height: 16px; color: #4f46e5;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+      </div>
+    </div>
+  `;
+  return pinElement;
+}
+
+function getPopupHtml(markerData: MapMarker): string {
+  return `
+    <div style="font-family: Inter, ui-sans-serif, system-ui, sans-serif; padding: 4px; min-width: 170px;">
+      <div style="font-weight: 600; font-size: 13px; color: #0f172a; line-height: 1.3; margin-bottom: 2px;">${markerData.title}</div>
+      ${markerData.subtitle || markerData.venueName ? `<div style="font-size: 11px; color: #64748b; line-height: 1.3;">${markerData.subtitle || markerData.venueName}</div>` : ''}
+      ${
+        markerData.category
+          ? `<div style="display: inline-block; margin-top: 6px; text-transform: uppercase; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe;">${markerData.category}</div>`
+          : ''
+      }
+    </div>
+  `;
 }
 
 export function ExoraMap({
@@ -53,6 +84,7 @@ export function ExoraMap({
   const [isMapLoaded, setIsMapLoaded] = React.useState(false);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
 
   // Filter out any markers without valid geographic coordinates
   const validMarkers = React.useMemo(() => {
@@ -74,7 +106,7 @@ export function ExoraMap({
     if (!apiKey || !mapContainerRef.current) return;
 
     let isMounted = true;
-    configureGoogleMaps(apiKey);
+    configureGoogleMaps(apiKey, mapId);
 
     const initMap = async () => {
       try {
@@ -88,14 +120,20 @@ export function ExoraMap({
           ? { lat: validMarkers[0].latitude, lng: validMarkers[0].longitude }
           : { lat: 28.6139, lng: 77.209 };
 
-        const mapInstance = new Map(mapContainerRef.current, {
+        const mapOptions: google.maps.MapOptions = {
           center: initialCenter,
           zoom: validMarkers.length === 1 ? 14 : zoom,
           disableDefaultUI: true,
           zoomControl: interactive,
           gestureHandling: interactive ? 'auto' : 'none',
-          mapId: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID',
-        });
+        };
+
+        // When a production Map ID is configured, attach it to enable AdvancedMarkerElement
+        if (mapId) {
+          mapOptions.mapId = mapId;
+        }
+
+        const mapInstance = new Map(mapContainerRef.current, mapOptions);
 
         mapRef.current = mapInstance;
         setIsMapLoaded(true);
@@ -132,7 +170,7 @@ export function ExoraMap({
       mapRef.current = null;
       setIsMapLoaded(false);
     };
-  }, [apiKey]);
+  }, [apiKey, mapId]);
 
   // Update markers and bounds when validMarkers or map state changes
   React.useEffect(() => {
@@ -154,81 +192,69 @@ export function ExoraMap({
     if (validMarkers.length === 0) return;
 
     const renderMarkers = async () => {
-      let AdvancedMarkerElement: any = null;
-
-      try {
-        const markerLib = await importLibrary('marker');
-        AdvancedMarkerElement = markerLib.AdvancedMarkerElement;
-      } catch {
-        // Fallback to legacy marker if marker library or AdvancedMarkerElement is unavailable
-      }
-
-      if (!isMounted || !mapRef.current) return;
-
       const bounds = new google.maps.LatLngBounds();
       const infoWindow = new google.maps.InfoWindow();
       infoWindowRef.current = infoWindow;
 
-      validMarkers.forEach((markerData) => {
-        const position = { lat: markerData.latitude, lng: markerData.longitude };
-        bounds.extend(position);
+      if (mapId) {
+        // ── PRODUCTION PATH ──
+        // Strictly use Google AdvancedMarkerElement with the configured Map ID.
+        // Does not rely on deprecated legacy Marker APIs.
+        const { AdvancedMarkerElement } = await importLibrary('marker');
+        if (!isMounted || !mapRef.current) return;
 
-        const popupHtml = `
-          <div style="font-family: Inter, ui-sans-serif, system-ui, sans-serif; padding: 4px; min-width: 170px;">
-            <div style="font-weight: 600; font-size: 13px; color: #0f172a; line-height: 1.3; margin-bottom: 2px;">${markerData.title}</div>
-            ${markerData.subtitle || markerData.venueName ? `<div style="font-size: 11px; color: #64748b; line-height: 1.3;">${markerData.subtitle || markerData.venueName}</div>` : ''}
-            ${
-              markerData.category
-                ? `<div style="display: inline-block; margin-top: 6px; text-transform: uppercase; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe;">${markerData.category}</div>`
-                : ''
+        validMarkers.forEach((markerData) => {
+          const position = { lat: markerData.latitude, lng: markerData.longitude };
+          bounds.extend(position);
+
+          const onAction = () => {
+            infoWindow.setContent(getPopupHtml(markerData));
+            if (markerInstance) {
+              infoWindow.open({
+                anchor: markerInstance,
+                map,
+              });
             }
-          </div>
-        `;
+            if (markerData.onClick) markerData.onClick();
+            if (onMarkerClick) onMarkerClick(markerData);
+          };
 
-        const onAction = () => {
-          infoWindow.setContent(popupHtml);
-          if (markerInstance) {
-            infoWindow.open({
-              anchor: markerInstance,
-              map,
-            });
-          }
-          if (markerData.onClick) markerData.onClick();
-          if (onMarkerClick) onMarkerClick(markerData);
-        };
+          const pinElement = createPinElement();
 
-        let markerInstance: any = null;
+          const markerInstance = new AdvancedMarkerElement({
+            map,
+            position,
+            content: pinElement,
+            title: markerData.title,
+          });
 
-        // Custom DOM element for Exora clean enterprise pin
-        const pinElement = document.createElement('div');
-        pinElement.className = 'exora-google-marker group cursor-pointer';
-        pinElement.innerHTML = `
-          <div style="display: flex; align-items: center; justify-content: center;">
-            <div style="width: 32px; height: 32px; border-radius: 9999px; background: #ffffff; border: 2.5px solid #4f46e5; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); cursor: pointer; transition: transform 0.15s ease-out;">
-              <svg style="width: 16px; height: 16px; color: #4f46e5;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-                <circle cx="12" cy="10" r="3"/>
-              </svg>
-            </div>
-          </div>
-        `;
+          markerInstance.addListener('gmp-click', onAction);
+          markersRef.current.push(markerInstance);
+        });
+      } else {
+        // ── DEVELOPMENT / TEST FALLBACK ──
+        // When NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID is not configured, warn operators and use fallback marker
+        // to prevent application crashes during local development and testing.
+        logger.warn(
+          'Google Maps: NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID is not configured. Google Advanced Markers require a Map ID in production. Using development fallback marker.'
+        );
 
-        if (AdvancedMarkerElement) {
-          try {
-            markerInstance = new AdvancedMarkerElement({
-              map,
-              position,
-              content: pinElement,
-              title: markerData.title,
-            });
-            markerInstance.addListener('gmp-click', onAction);
-          } catch {
-            // AdvancedMarkerElement instantiation failed, fallback below
-          }
-        }
+        validMarkers.forEach((markerData) => {
+          const position = { lat: markerData.latitude, lng: markerData.longitude };
+          bounds.extend(position);
 
-        if (!markerInstance) {
-          // Standard Marker fallback with custom SVG data URI
+          const onAction = () => {
+            infoWindow.setContent(getPopupHtml(markerData));
+            if (markerInstance) {
+              infoWindow.open({
+                anchor: markerInstance,
+                map,
+              });
+            }
+            if (markerData.onClick) markerData.onClick();
+            if (onMarkerClick) onMarkerClick(markerData);
+          };
+
           const svgPin = {
             url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
               <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
@@ -241,19 +267,17 @@ export function ExoraMap({
             anchor: new google.maps.Point(17, 17),
           };
 
-          markerInstance = new google.maps.Marker({
+          const markerInstance = new google.maps.Marker({
             map,
             position,
             icon: svgPin,
             title: markerData.title,
           });
-          markerInstance.addListener('click', onAction);
-        }
 
-        if (markerInstance) {
+          markerInstance.addListener('click', onAction);
           markersRef.current.push(markerInstance);
-        }
-      });
+        });
+      }
 
       // Fit map bounds
       if (validMarkers.length === 1) {
@@ -269,7 +293,7 @@ export function ExoraMap({
     return () => {
       isMounted = false;
     };
-  }, [validMarkers, isMapLoaded, apiKey, onMarkerClick]);
+  }, [validMarkers, isMapLoaded, apiKey, mapId, onMarkerClick]);
 
   // Missing Google Maps public API key state
   if (!apiKey) {
