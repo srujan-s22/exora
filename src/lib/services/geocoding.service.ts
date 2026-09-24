@@ -14,6 +14,7 @@ export interface GeocodeResult {
   latitude: number;
   longitude: number;
   displayName?: string;
+  confidence?: string;
   relevance?: number;
 }
 
@@ -45,10 +46,11 @@ function getNormalizedKey(loc: GeocodeLocationInput): string {
 export const GeocodingService = {
   /**
    * Retrieves the configured Mapbox access token.
-   * Supports MAPBOX_ACCESS_TOKEN or NEXT_PUBLIC_MAPBOX_TOKEN.
+   * Strictly server-side MAPBOX_ACCESS_TOKEN only.
+   * Never falls back to browser-scoped public tokens.
    */
   getToken(): string | undefined {
-    return process.env.MAPBOX_ACCESS_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    return process.env.MAPBOX_ACCESS_TOKEN;
   },
 
   /**
@@ -58,7 +60,7 @@ export const GeocodingService = {
   async geocode(location: GeocodeLocationInput): Promise<GeocodeResult | null> {
     const token = this.getToken();
     if (!token) {
-      logger.warn('Geocoding: Mapbox access token is not configured in environment. Skipping coordinate lookup.');
+      logger.warn('Geocoding: MAPBOX_ACCESS_TOKEN is not configured in environment. Skipping coordinate lookup.');
       return null;
     }
 
@@ -123,11 +125,11 @@ export const GeocodingService = {
   },
 
   /**
-   * Internal query runner against Mapbox Geocoding Places API.
+   * Internal query runner against Mapbox Geocoding API v6 (forward geocoding).
    */
   async queryMapbox(query: string, token: string): Promise<GeocodeResult | null> {
     try {
-      const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${encodeURIComponent(token)}&types=address,poi,place,locality,postcode&limit=1`;
+      const endpoint = `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(query)}&access_token=${encodeURIComponent(token)}&limit=1`;
 
       const response = await fetch(endpoint, {
         method: 'GET',
@@ -152,13 +154,30 @@ export const GeocodingService = {
       }
 
       const feature = data.features[0];
-      if (!feature || !Array.isArray(feature.center) || feature.center.length < 2) {
+      if (!feature) {
         return null;
       }
 
-      // Mapbox center format: [longitude, latitude]
-      const longitude = feature.center[0];
-      const latitude = feature.center[1];
+      // In Mapbox Geocoding v6, coordinates are primarily located at feature.geometry.coordinates ([longitude, latitude])
+      // or optionally feature.properties.coordinates ({ longitude, latitude })
+      let longitude: number | undefined;
+      let latitude: number | undefined;
+
+      if (Array.isArray(feature.geometry?.coordinates) && feature.geometry.coordinates.length >= 2) {
+        longitude = feature.geometry.coordinates[0];
+        latitude = feature.geometry.coordinates[1];
+      } else if (
+        feature.properties?.coordinates &&
+        typeof feature.properties.coordinates.latitude === 'number' &&
+        typeof feature.properties.coordinates.longitude === 'number'
+      ) {
+        longitude = feature.properties.coordinates.longitude;
+        latitude = feature.properties.coordinates.latitude;
+      }
+
+      if (longitude == null || latitude == null) {
+        return null;
+      }
 
       // Validate coordinate bounds
       if (
@@ -175,11 +194,25 @@ export const GeocodingService = {
         return null;
       }
 
+      // Check match confidence if provided by v6 match_code
+      const confidence = feature.properties?.match_code?.confidence;
+      if (confidence === 'low') {
+        logger.warn('Geocoding: Match confidence is low. Rejecting match as unreliable.');
+        return null;
+      }
+
+      // Extract display name from v6 properties
+      const displayName =
+        feature.properties?.full_address ||
+        (feature.properties?.name && feature.properties?.place_formatted
+          ? `${feature.properties.name}, ${feature.properties.place_formatted}`
+          : feature.properties?.place_formatted || feature.properties?.name);
+
       return {
         latitude: Math.round(latitude * 1e6) / 1e6,
         longitude: Math.round(longitude * 1e6) / 1e6,
-        displayName: feature.place_name,
-        relevance: feature.relevance,
+        displayName,
+        confidence,
       };
     } catch (err: any) {
       if (err.name === 'TimeoutError' || err.name === 'AbortError') {

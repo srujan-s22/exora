@@ -312,3 +312,14 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* Exora Mapbox Light Popup Styling */
+.exora-light-popup .mapboxgl-popup-content {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 8px;
+}
+.exora-light-popup .mapboxgl-popup-tip {
+  border-top-color: #ffffff;
+}
