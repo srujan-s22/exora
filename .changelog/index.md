@@ -19,5 +19,7 @@ Master index of all completed engineering updates for the **Exora** platform.
 | **[U009](./updates/u009-srs-4.0-specification.md)** | 2026-08-11 | Software Requirements Specification (SRS) 4.0 | Completed | Upgraded and consolidated SRS reference document to version 4.0 incorporating updates U001 through U008. |
 | **[U010](./updates/u010-security-idor-scope-hardening.md)** | 2026-09-17 | Security IDOR Remediation & Counter Sale Scope Hardening | Implemented | Remediated cross-exhibition authorization bypass on /api/exhibitions/[id] routes and restored Super Admin sales scoping. |
 | **[U011](./updates/u011-exhibition-location-system.md)** | 2026-09-24 | Exhibition Venue & Location System (Step 1) | Implemented | Added backward-compatible venue and address structure, Zod validation, and Create/Edit UI workflows. |
-| **[U012](./updates/u012-location-map-infrastructure.md)** | 2026-09-24 | Location Geocoding & Map Infrastructure (Step 2) | Implemented | Added Mapbox geocoding service, stale coordinate protection, caching, and reusable ExoraMap component. |
+| **[U012](./updates/u012-location-map-infrastructure.md)** | 2026-09-24 | Location Geocoding & Map Infrastructure (Step 2) | Implemented | Added Google Maps Platform geocoding service, stale coordinate protection, caching, and reusable ExoraMap component. |
+| **[U013](./updates/u013-super-admin-exhibition-map-overview.md)** | 2026-09-24 | Super Admin Exhibition Map Overview (Step 3) | Implemented | Unified control plane with two-column overview, bidirectional card-map sync, 3-state location badges, and isolated map errors. |
+
 

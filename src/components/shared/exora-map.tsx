@@ -25,6 +25,8 @@ export interface ExoraMapProps {
   className?: string;
   interactive?: boolean;
   onMarkerClick?: (marker: MapMarker) => void;
+  selectedMarkerId?: string | null;
+  emptyMessage?: string;
 }
 
 let isGoogleMapsConfigured = false;
@@ -76,10 +78,13 @@ export function ExoraMap({
   className = 'w-full h-80 rounded-xl overflow-hidden',
   interactive = true,
   onMarkerClick,
+  selectedMarkerId,
+  emptyMessage,
 }: ExoraMapProps) {
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
   const mapRef = React.useRef<google.maps.Map | null>(null);
   const markersRef = React.useRef<any[]>([]);
+  const markerMapRef = React.useRef<Map<string, { marker: any; data: MapMarker }>>(new Map());
   const infoWindowRef = React.useRef<google.maps.InfoWindow | null>(null);
   const [isMapLoaded, setIsMapLoaded] = React.useState(false);
 
@@ -167,6 +172,7 @@ export function ExoraMap({
         else if (typeof (m as any).setMap === 'function') (m as any).setMap(null);
       });
       markersRef.current = [];
+      markerMapRef.current.clear();
       mapRef.current = null;
       setIsMapLoaded(false);
     };
@@ -188,6 +194,7 @@ export function ExoraMap({
       else if (typeof (m as any).setMap === 'function') (m as any).setMap(null);
     });
     markersRef.current = [];
+    markerMapRef.current.clear();
 
     if (validMarkers.length === 0) return;
 
@@ -230,6 +237,7 @@ export function ExoraMap({
 
           markerInstance.addListener('gmp-click', onAction);
           markersRef.current.push(markerInstance);
+          markerMapRef.current.set(markerData.id, { marker: markerInstance, data: markerData });
         });
       } else {
         // ── DEVELOPMENT / TEST FALLBACK ──
@@ -276,15 +284,18 @@ export function ExoraMap({
 
           markerInstance.addListener('click', onAction);
           markersRef.current.push(markerInstance);
+          markerMapRef.current.set(markerData.id, { marker: markerInstance, data: markerData });
         });
       }
 
-      // Fit map bounds
-      if (validMarkers.length === 1) {
-        map.setCenter({ lat: validMarkers[0].latitude, lng: validMarkers[0].longitude });
-        map.setZoom(14);
-      } else if (validMarkers.length > 1) {
-        map.fitBounds(bounds, { top: 40, bottom: 40, left: 40, right: 40 });
+      // Initial fit map bounds if not focusing on a specific selected marker
+      if (!selectedMarkerId || selectedMarkerId === 'all') {
+        if (validMarkers.length === 1) {
+          map.setCenter({ lat: validMarkers[0].latitude, lng: validMarkers[0].longitude });
+          map.setZoom(14);
+        } else if (validMarkers.length > 1) {
+          map.fitBounds(bounds, { top: 40, bottom: 40, left: 40, right: 40 });
+        }
       }
     };
 
@@ -293,7 +304,44 @@ export function ExoraMap({
     return () => {
       isMounted = false;
     };
-  }, [validMarkers, isMapLoaded, apiKey, mapId, onMarkerClick]);
+  }, [validMarkers, isMapLoaded, apiKey, mapId, onMarkerClick, selectedMarkerId]);
+
+  // Synchronize map focus and InfoWindow when selectedMarkerId changes
+  React.useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isMapLoaded) return;
+
+    if (!selectedMarkerId || selectedMarkerId === 'all') {
+      // If no specific marker is selected, fit bounds to show all markers
+      if (validMarkers.length > 1) {
+        const bounds = new google.maps.LatLngBounds();
+        validMarkers.forEach((m) => bounds.extend({ lat: m.latitude, lng: m.longitude }));
+        map.fitBounds(bounds, { top: 40, bottom: 40, left: 40, right: 40 });
+      } else if (validMarkers.length === 1) {
+        map.setCenter({ lat: validMarkers[0].latitude, lng: validMarkers[0].longitude });
+        map.setZoom(14);
+      }
+      if (infoWindowRef.current) {
+        infoWindowRef.current.close();
+      }
+      return;
+    }
+
+    const item = markerMapRef.current.get(selectedMarkerId);
+    if (item && item.marker) {
+      const { marker, data } = item;
+      map.panTo({ lat: data.latitude, lng: data.longitude });
+      map.setZoom(15);
+
+      if (infoWindowRef.current) {
+        infoWindowRef.current.setContent(getPopupHtml(data));
+        infoWindowRef.current.open({
+          anchor: marker,
+          map,
+        });
+      }
+    }
+  }, [selectedMarkerId, isMapLoaded, validMarkers]);
 
   // Missing Google Maps public API key state
   if (!apiKey) {
@@ -314,8 +362,8 @@ export function ExoraMap({
     );
   }
 
-  // Zero valid coordinates state
-  if (markers.length > 0 && validMarkers.length === 0) {
+  // Zero valid coordinates or empty markers state
+  if (validMarkers.length === 0) {
     return (
       <div
         className={`${className} bg-slate-50 border border-slate-200 flex flex-col items-center justify-center p-6 text-center space-y-2 relative`}
@@ -323,7 +371,9 @@ export function ExoraMap({
         <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
           <MapPin size={16} />
         </div>
-        <p className="text-xs font-medium text-slate-500">No geographic coordinates available for this location.</p>
+        <p className="text-xs font-medium text-slate-500">
+          {emptyMessage || (markers.length > 0 ? 'No exhibition locations configured yet.' : 'No exhibitions to display on map.')}
+        </p>
       </div>
     );
   }

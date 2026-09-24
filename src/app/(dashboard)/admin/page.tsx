@@ -12,11 +12,13 @@ import { useToast } from '@/components/providers/toast-provider';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { SuperAdminExhibitionOverview } from '@/components/dashboard/super-admin-exhibition-overview';
 
 export default function AdminDashboardPage() {
   const { addToast } = useToast();
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [fetchError, setFetchError] = React.useState<string | null>(null);
   const [dashboardData, setDashboardData] = React.useState<any>(null);
 
   // Filters State
@@ -26,6 +28,7 @@ export default function AdminDashboardPage() {
   const fetchDashboardData = React.useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     else setIsRefreshing(true);
+    setFetchError(null);
 
     try {
       const res = await fetch('/api/dashboard/admin');
@@ -33,8 +36,11 @@ export default function AdminDashboardPage() {
         const body = await res.json();
         if (body.success) {
           setDashboardData(body.data);
+        } else {
+          setFetchError(body.error?.message || 'Unable to load exhibitions. Please refresh and try again.');
         }
       } else {
+        setFetchError('Unable to load exhibitions. Please refresh and try again.');
         addToast({
           type: 'error',
           title: 'Retrieval Failed',
@@ -43,6 +49,7 @@ export default function AdminDashboardPage() {
       }
     } catch (err) {
       console.error('Error fetching admin dashboard:', err);
+      setFetchError('Unable to load exhibitions. Please refresh and try again.');
       addToast({
         type: 'error',
         title: 'Network Error',
@@ -213,6 +220,35 @@ export default function AdminDashboardPage() {
   // Render inline custom premium charts
   const upiPercent = metrics ? (metrics.upiRevenue / ((metrics.upiRevenue + metrics.cashRevenue) || 1)) * 100 : 50;
 
+  if (!isLoading && fetchError && !dashboardData) {
+    return (
+      <ContentWrapper>
+        <PageHeader
+          title="Admin Dashboard"
+          description="Overview of ticket sales, gate entries, system security, and staff activity."
+          showDivider
+        />
+        <div className="flex flex-col items-center justify-center p-12 text-center rounded-2xl border border-rose-500/20 bg-gray-900 shadow-lg max-w-xl mx-auto my-12 space-y-4">
+          <div className="p-4 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30">
+            <AlertTriangle size={36} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-100">Unable to load exhibitions</h2>
+          <p className="text-sm text-gray-400 max-w-md leading-relaxed">
+            {fetchError}
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => fetchDashboardData()}
+            leftIcon={<RefreshCw size={14} />}
+          >
+            Retry
+          </Button>
+        </div>
+      </ContentWrapper>
+    );
+  }
+
   if (!isLoading && dashboardData?.noExhibitionsAssigned) {
     return (
       <ContentWrapper>
@@ -265,6 +301,14 @@ export default function AdminDashboardPage() {
           </div>
         }
         showDivider
+      />
+
+      {/* ── SUPER ADMIN EXHIBITION OVERVIEW + MAP (STEP 3) ── */}
+      <SuperAdminExhibitionOverview
+        exhibitions={dashboardData?.exhibitionBreakdown || []}
+        selectedExhibitionId={selectedExhibitionId}
+        onSelectExhibition={setSelectedExhibitionId}
+        isLoading={isLoading}
       />
 
       {/* Advanced Filter Toolbar */}
