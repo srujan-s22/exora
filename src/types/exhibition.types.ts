@@ -20,6 +20,7 @@ export interface ExhibitionLocation {
   postalCode: string;
   latitude?: number | null;
   longitude?: number | null;
+  placeId?: string;
 }
 
 export interface Exhibition {

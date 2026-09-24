@@ -16,6 +16,7 @@ export interface IExhibitionLocation {
   postalCode: string;
   latitude?: number | null;
   longitude?: number | null;
+  placeId?: string;
 }
 
 export interface IExhibitionSettings {
@@ -85,6 +86,7 @@ const ExhibitionLocationSchema = new Schema<IExhibitionLocation>(
     postalCode: { type: String, required: true, trim: true },
     latitude: { type: Number, min: -90, max: 90 },
     longitude: { type: Number, min: -180, max: 180 },
+    placeId: { type: String, trim: true },
   },
   { _id: false }
 );

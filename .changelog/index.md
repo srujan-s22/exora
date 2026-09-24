@@ -21,5 +21,6 @@ Master index of all completed engineering updates for the **Exora** platform.
 | **[U011](./updates/u011-exhibition-location-system.md)** | 2026-09-24 | Exhibition Venue & Location System (Step 1) | Implemented | Added backward-compatible venue and address structure, Zod validation, and Create/Edit UI workflows. |
 | **[U012](./updates/u012-location-map-infrastructure.md)** | 2026-09-24 | Location Geocoding & Map Infrastructure (Step 2) | Implemented | Added Google Maps Platform geocoding service, stale coordinate protection, caching, and reusable ExoraMap component. |
 | **[U013](./updates/u013-super-admin-exhibition-map-overview.md)** | 2026-09-24 | Super Admin Exhibition Map Overview (Step 3) | Implemented | Unified control plane with two-column overview, bidirectional card-map sync, 3-state location badges, and isolated map errors. |
+| **[U014](./updates/u014-google-places-location-picker.md)** | 2026-09-24 | Google Places Exhibition Location Picker | Implemented | Replaced manual 6-field location entry with Google Places Autocomplete picker, placeId support, coordinates verification, and ExoraMap preview. |
 
 

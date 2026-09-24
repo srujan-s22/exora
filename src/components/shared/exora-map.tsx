@@ -29,17 +29,7 @@ export interface ExoraMapProps {
   emptyMessage?: string;
 }
 
-let isGoogleMapsConfigured = false;
-function configureGoogleMaps(apiKey: string, mapId?: string) {
-  if (!isGoogleMapsConfigured) {
-    setOptions({
-      key: apiKey,
-      v: 'weekly',
-      ...(mapId ? { mapIds: [mapId] } : {}),
-    });
-    isGoogleMapsConfigured = true;
-  }
-}
+import { configureGoogleMaps } from '@/lib/utils/google-maps-loader';
 
 function createPinElement(): HTMLElement {
   const pinElement = document.createElement('div');

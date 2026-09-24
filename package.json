@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx tsx scripts/test-location-picker.ts"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.1.3",

@@ -35,9 +35,25 @@ export const ExhibitionService = {
       slug = `${baseSlug}-${counter++}`;
     }
 
-    // 2. Geocode location if provided
+    // 2. Resolve location coordinates if provided
     if (data.location) {
-      if (data.location.latitude == null || data.location.longitude == null) {
+      if (data.location.placeId) {
+        // Resolve placeId server-side
+        const resolved = await GeocodingService.resolvePlaceId(data.location.placeId);
+        if (resolved) {
+          data.location.latitude = resolved.latitude;
+          data.location.longitude = resolved.longitude;
+        } else if (data.location.latitude != null && data.location.longitude != null) {
+          // Validate client-provided coordinates from Google Places selection
+          const lat = data.location.latitude;
+          const lng = data.location.longitude;
+          if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+            data.location.latitude = null;
+            data.location.longitude = null;
+          }
+        }
+      } else if (data.location.latitude == null || data.location.longitude == null) {
+        // Fallback text geocode only when placeId is not present and coordinates are missing
         const geo = await GeocodingService.geocode(data.location);
         if (geo) {
           data.location.latitude = geo.latitude;
@@ -205,15 +221,35 @@ export const ExhibitionService = {
         const locationChanged = GeocodingService.hasLocationChanged(prevLocation, data.location);
 
         if (locationChanged) {
-          // Address changed! Invalidate old coordinates immediately to prevent stale coordinates
-          data.location.latitude = null;
-          data.location.longitude = null;
+          if (data.location.placeId) {
+            // New Google Place selected! Resolve server-side
+            const resolved = await GeocodingService.resolvePlaceId(data.location.placeId);
+            if (resolved) {
+              data.location.latitude = resolved.latitude;
+              data.location.longitude = resolved.longitude;
+            } else if (data.location.latitude != null && data.location.longitude != null) {
+              // Validate client-provided coordinates from Google Places selection
+              const lat = data.location.latitude;
+              const lng = data.location.longitude;
+              if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                data.location.latitude = null;
+                data.location.longitude = null;
+              }
+            } else {
+              data.location.latitude = null;
+              data.location.longitude = null;
+            }
+          } else {
+            // Text address changed! Invalidate old coordinates immediately to prevent stale coordinates
+            data.location.latitude = null;
+            data.location.longitude = null;
 
-          // Attempt re-geocoding for the new address
-          const geo = await GeocodingService.geocode(data.location);
-          if (geo) {
-            data.location.latitude = geo.latitude;
-            data.location.longitude = geo.longitude;
+            // Attempt re-geocoding for the new address
+            const geo = await GeocodingService.geocode(data.location);
+            if (geo) {
+              data.location.latitude = geo.latitude;
+              data.location.longitude = geo.longitude;
+            }
           }
         } else {
           // Location did not change
@@ -221,6 +257,15 @@ export const ExhibitionService = {
             // Keep existing coordinates without making an unnecessary external API call
             data.location.latitude = prevLocation.latitude;
             data.location.longitude = prevLocation.longitude;
+            if (prevLocation.placeId && !data.location.placeId) {
+              data.location.placeId = prevLocation.placeId;
+            }
+          } else if (data.location.placeId) {
+            const resolved = await GeocodingService.resolvePlaceId(data.location.placeId);
+            if (resolved) {
+              data.location.latitude = resolved.latitude;
+              data.location.longitude = resolved.longitude;
+            }
           } else {
             // Coordinates were missing on this existing location: geocode it
             const geo = await GeocodingService.geocode(data.location);

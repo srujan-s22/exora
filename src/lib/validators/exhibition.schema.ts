@@ -18,9 +18,10 @@ export const exhibitionLocationSchema = z.object({
   city: z.string().min(1, 'City is required').max(100, 'City cannot exceed 100 characters').trim(),
   state: z.string().min(1, 'State is required').max(100, 'State cannot exceed 100 characters').trim(),
   country: z.string().min(1, 'Country is required').max(100, 'Country cannot exceed 100 characters').trim(),
-  postalCode: z.string().min(1, 'Postal code is required').max(20, 'Postal code cannot exceed 20 characters').trim(),
+  postalCode: z.string().max(50, 'Postal code cannot exceed 50 characters').trim().optional().default(''),
   latitude: z.number().min(-90, 'Latitude must be between -90 and 90').max(90, 'Latitude must be between -90 and 90').nullable().optional(),
   longitude: z.number().min(-180, 'Longitude must be between -180 and 180').max(180, 'Longitude must be between -180 and 180').nullable().optional(),
+  placeId: z.string().max(250).trim().optional(),
 });
 
 export const createExhibitionSchema = z.object({

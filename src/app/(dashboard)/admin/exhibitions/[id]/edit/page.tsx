@@ -15,6 +15,7 @@ import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
 import { hasAdminPermission } from '@/lib/utils/permission-helpers';
 import type { Exhibition } from '@/types/exhibition.types';
+import { ExhibitionLocationPicker, type SelectedExhibitionLocation } from '@/components/shared/exhibition-location-picker';
 
 interface StaffOption {
   id: string;
@@ -45,12 +46,7 @@ export default function EditExhibitionPage() {
   const [category, setCategory] = React.useState('general');
   const [description, setDescription] = React.useState('');
   const [hasExistingLocation, setHasExistingLocation] = React.useState(false);
-  const [venueName, setVenueName] = React.useState('');
-  const [address, setAddress] = React.useState('');
-  const [city, setCity] = React.useState('');
-  const [state, setState] = React.useState('');
-  const [country, setCountry] = React.useState('');
-  const [postalCode, setPostalCode] = React.useState('');
+  const [location, setLocation] = React.useState<SelectedExhibitionLocation | null>(null);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [capacity, setCapacity] = React.useState('');
@@ -146,20 +142,20 @@ export default function EditExhibitionPage() {
           setDescription(exh.description || '');
           if (exh.location) {
             setHasExistingLocation(true);
-            setVenueName(exh.location.venueName || '');
-            setAddress(exh.location.address || '');
-            setCity(exh.location.city || '');
-            setState(exh.location.state || '');
-            setCountry(exh.location.country || '');
-            setPostalCode(exh.location.postalCode || '');
+            setLocation({
+              placeId: exh.location.placeId,
+              venueName: exh.location.venueName || '',
+              address: exh.location.address || '',
+              city: exh.location.city || '',
+              state: exh.location.state || '',
+              country: exh.location.country || '',
+              postalCode: exh.location.postalCode || '',
+              latitude: exh.location.latitude,
+              longitude: exh.location.longitude,
+            });
           } else {
             setHasExistingLocation(false);
-            setVenueName('');
-            setAddress('');
-            setCity('');
-            setState('');
-            setCountry('');
-            setPostalCode('');
+            setLocation(null);
           }
           setStartDate(formatDatetimeLocal(exh.startDate));
           setEndDate(formatDatetimeLocal(exh.endDate));
@@ -229,24 +225,9 @@ export default function EditExhibitionPage() {
       newErrors.endDate = 'End date must be after the start date';
     }
 
-    const hasAnyLocationInput = Boolean(
-      venueName.trim() ||
-      address.trim() ||
-      city.trim() ||
-      state.trim() ||
-      country.trim() ||
-      postalCode.trim()
-    );
-
-    // If exhibition already has location configured, or user entered any location information,
-    // require all 6 location fields.
-    if (hasExistingLocation || hasAnyLocationInput) {
-      if (!venueName.trim()) newErrors.venueName = 'Venue name is required';
-      if (!address.trim()) newErrors.address = 'Address is required';
-      if (!city.trim()) newErrors.city = 'City is required';
-      if (!state.trim()) newErrors.state = 'State is required';
-      if (!country.trim()) newErrors.country = 'Country is required';
-      if (!postalCode.trim()) newErrors.postalCode = 'Postal code is required';
+    // If exhibition already had a configured location, require a valid location on update
+    if (hasExistingLocation && !location) {
+      newErrors.location = 'This exhibition requires a location. Please select one from the suggestions.';
     }
 
     // Validate ticket types
@@ -293,15 +274,6 @@ export default function EditExhibitionPage() {
       // Calculate entryFee as standard ticket fee (e.g. price of first ticket type)
       const primaryFee = mappedTicketTypes.length > 0 ? mappedTicketTypes[0].price : 0;
 
-      const hasAnyLocationInput = Boolean(
-        venueName.trim() ||
-        address.trim() ||
-        city.trim() ||
-        state.trim() ||
-        country.trim() ||
-        postalCode.trim()
-      );
-
       const payload: Record<string, any> = {
         name: name.trim(),
         category,
@@ -316,16 +288,19 @@ export default function EditExhibitionPage() {
         notes: notes.trim() || undefined,
       };
 
-      if (hasExistingLocation || hasAnyLocationInput) {
-        payload.venue = venueName.trim();
-        payload.address = address.trim();
+      if (location) {
+        payload.venue = location.venueName;
+        payload.address = location.address;
         payload.location = {
-          venueName: venueName.trim(),
-          address: address.trim(),
-          city: city.trim(),
-          state: state.trim(),
-          country: country.trim(),
-          postalCode: postalCode.trim(),
+          venueName: location.venueName,
+          address: location.address,
+          city: location.city,
+          state: location.state,
+          country: location.country,
+          postalCode: location.postalCode,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          placeId: location.placeId,
         };
       }
 
@@ -507,66 +482,23 @@ export default function EditExhibitionPage() {
               <span>Venue & Location</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {!hasExistingLocation && (
-              <div className="text-xs text-amber-400/90 bg-amber-950/20 border border-amber-800/30 p-3 rounded-lg flex items-center gap-2">
-                <MapPin size={14} className="shrink-0 text-amber-400" />
-                <span>Location not configured yet. Configure venue and geographical address below.</span>
-              </div>
-            )}
-            <Input
-              label="Venue Name"
-              placeholder="e.g. Hall A, Pragati Maidan"
-              value={venueName}
-              onChange={(e) => setVenueName(e.target.value)}
-              error={errors.venueName}
+          <CardContent>
+            <ExhibitionLocationPicker
+              value={location}
+              onChange={(loc) => {
+                setLocation(loc);
+                if (errors.location) {
+                  setErrors((prev) => {
+                    const copy = { ...prev };
+                    delete copy.location;
+                    return copy;
+                  });
+                }
+              }}
+              error={errors.location}
               disabled={isSubmitting}
+              required={hasExistingLocation}
             />
-            <Textarea
-              label="Address"
-              placeholder="Street address or physical landmark..."
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              error={errors.address}
-              disabled={isSubmitting}
-              rows={2}
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="City"
-                placeholder="e.g. New Delhi"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                error={errors.city}
-                disabled={isSubmitting}
-              />
-              <Input
-                label="State"
-                placeholder="e.g. Delhi"
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-                error={errors.state}
-                disabled={isSubmitting}
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Country"
-                placeholder="e.g. India"
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                error={errors.country}
-                disabled={isSubmitting}
-              />
-              <Input
-                label="Postal Code"
-                placeholder="e.g. 110001"
-                value={postalCode}
-                onChange={(e) => setPostalCode(e.target.value)}
-                error={errors.postalCode}
-                disabled={isSubmitting}
-              />
-            </div>
           </CardContent>
         </Card>
 

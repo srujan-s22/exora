@@ -8,6 +8,7 @@ export interface GeocodeLocationInput {
   state?: string;
   country?: string;
   postalCode?: string;
+  placeId?: string;
 }
 
 export interface GeocodeResult {
@@ -15,6 +16,13 @@ export interface GeocodeResult {
   longitude: number;
   displayName?: string;
   locationType?: string;
+  placeId?: string;
+  venueName?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
 }
 
 /**
@@ -212,6 +220,110 @@ export const GeocodingService = {
   },
 
   /**
+   * Resolves a Google Place ID into authoritative coordinates and details.
+   * Leverages server-side Geocoding API by place_id (with Place Details fallback).
+   */
+  async resolvePlaceId(placeId: string): Promise<GeocodeResult | null> {
+    if (!placeId || typeof placeId !== 'string' || !placeId.trim()) {
+      return null;
+    }
+
+    const cleanPlaceId = placeId.trim();
+    const cacheKey = `place:${cleanPlaceId}`;
+
+    if (geocodeCache.has(cacheKey)) {
+      return geocodeCache.get(cacheKey)!;
+    }
+
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
+      logger.warn('Geocoding: GOOGLE_MAPS_SERVER_API_KEY is not configured in environment. Skipping server place resolution.');
+      return null;
+    }
+
+    // 1. Try Geocoding API by place_id (standard Geocoding API capability)
+    try {
+      const endpoint = `https://maps.googleapis.com/maps/api/geocode/json?place_id=${encodeURIComponent(cleanPlaceId)}&key=${encodeURIComponent(apiKey)}`;
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(6000),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
+          const first = data.results[0];
+          const location = first?.geometry?.location;
+          if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
+            const latitude = Math.round(location.lat * 1e6) / 1e6;
+            const longitude = Math.round(location.lng * 1e6) / 1e6;
+
+            if (latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+              const result: GeocodeResult = {
+                latitude,
+                longitude,
+                displayName: first.formatted_address,
+                locationType: first.geometry?.location_type,
+                placeId: cleanPlaceId,
+              };
+
+              if (geocodeCache.size >= MAX_CACHE_SIZE) {
+                const oldest = geocodeCache.keys().next().value;
+                if (oldest) geocodeCache.delete(oldest);
+              }
+              geocodeCache.set(cacheKey, result);
+              return result;
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.warn(`Geocoding: Place lookup via geocode endpoint failed: ${err.message}`);
+    }
+
+    // 2. Try Place Details API fallback
+    try {
+      const detailsEndpoint = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(cleanPlaceId)}&fields=place_id,name,formatted_address,geometry&key=${encodeURIComponent(apiKey)}`;
+      const detailsRes = await fetch(detailsEndpoint, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(6000),
+      });
+
+      if (detailsRes.ok) {
+        const data = await detailsRes.json();
+        if (data.status === 'OK' && data.result?.geometry?.location) {
+          const loc = data.result.geometry.location;
+          const latitude = Math.round(loc.lat * 1e6) / 1e6;
+          const longitude = Math.round(loc.lng * 1e6) / 1e6;
+
+          if (latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+            const result: GeocodeResult = {
+              latitude,
+              longitude,
+              displayName: data.result.formatted_address,
+              venueName: data.result.name,
+              placeId: cleanPlaceId,
+            };
+
+            if (geocodeCache.size >= MAX_CACHE_SIZE) {
+              const oldest = geocodeCache.keys().next().value;
+              if (oldest) geocodeCache.delete(oldest);
+            }
+            geocodeCache.set(cacheKey, result);
+            return result;
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.warn(`Geocoding: Place lookup via Place Details failed: ${err.message}`);
+    }
+
+    return null;
+  },
+
+  /**
    * Compares two location objects to detect whether meaningful address fields have changed.
    */
   hasLocationChanged(
@@ -220,6 +332,15 @@ export const GeocodingService = {
   ): boolean {
     if (!prev && !next) return false;
     if (!prev || !next) return true;
+
+    // If both specify a placeId, compare placeIds
+    if (prev.placeId && next.placeId) {
+      return prev.placeId.trim() !== next.placeId.trim();
+    }
+    // If one specifies placeId and the other does not, location changed
+    if ((prev.placeId && !next.placeId) || (!prev.placeId && next.placeId)) {
+      return true;
+    }
 
     const normalize = (val?: string | null) => (val || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
