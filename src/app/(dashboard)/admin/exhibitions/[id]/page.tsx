@@ -32,6 +32,7 @@ import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/providers/toast-provider';
 import { useAuth } from '@/components/providers/auth-provider';
 import { StatCard } from '@/components/shared/stat-card';
+import { ExoraMap } from '@/components/shared/exora-map';
 import { hasAdminPermission } from '@/lib/utils/permission-helpers';
 import type { Exhibition } from '@/types/exhibition.types';
 
@@ -470,6 +471,25 @@ export default function ExhibitionDetailPage() {
                         </div>
                       </div>
                     </div>
+
+                    {exhibition.location?.latitude != null && exhibition.location?.longitude != null && (
+                      <div className="pt-3 border-t border-gray-800/60 space-y-2">
+                        <span className="font-semibold text-gray-400 block text-xs">Venue Map Location</span>
+                        <ExoraMap
+                          markers={[
+                            {
+                              id: exhibition.id,
+                              latitude: exhibition.location.latitude,
+                              longitude: exhibition.location.longitude,
+                              title: exhibition.name,
+                              subtitle: exhibition.location.venueName,
+                              category: exhibition.category,
+                            },
+                          ]}
+                          className="w-full h-52 rounded-lg overflow-hidden border border-gray-800"
+                        />
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 

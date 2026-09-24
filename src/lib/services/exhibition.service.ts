@@ -7,6 +7,7 @@ import { TicketScan as TicketScanModel } from '@/lib/db/models/ticket-scan.model
 import { connectToDatabase } from '@/lib/db/connection';
 import { AuditService } from '@/lib/services/audit.service';
 import { NotificationService } from '@/lib/services/notification.service';
+import { GeocodingService } from '@/lib/services/geocoding.service';
 import { escapeRegex } from '@/lib/utils/sanitize';
 import type { Exhibition, CreateExhibitionInput, UpdateExhibitionInput } from '@/types/exhibition.types';
 import type { PaginationParams, PaginationMeta } from '@/types/api.types';
@@ -34,7 +35,21 @@ export const ExhibitionService = {
       slug = `${baseSlug}-${counter++}`;
     }
 
-    // 2. Create the Exhibition document
+    // 2. Geocode location if provided
+    if (data.location) {
+      if (data.location.latitude == null || data.location.longitude == null) {
+        const geo = await GeocodingService.geocode(data.location);
+        if (geo) {
+          data.location.latitude = geo.latitude;
+          data.location.longitude = geo.longitude;
+        } else {
+          data.location.latitude = null;
+          data.location.longitude = null;
+        }
+      }
+    }
+
+    // 3. Create the Exhibition document
     const venue = data.venue || data.location?.venueName || '';
     const address = data.address || data.location?.address || '';
 
@@ -183,12 +198,49 @@ export const ExhibitionService = {
     if (data.venue !== undefined) doc.venue = data.venue;
     if (data.address !== undefined) doc.address = data.address;
     if (data.location !== undefined) {
-      doc.location = data.location;
-      if (data.location?.venueName && data.venue === undefined) {
-        doc.venue = data.location.venueName;
-      }
-      if (data.location?.address && data.address === undefined) {
-        doc.address = data.location.address;
+      if (data.location === null) {
+        doc.location = null;
+      } else {
+        const prevLocation = doc.location;
+        const locationChanged = GeocodingService.hasLocationChanged(prevLocation, data.location);
+
+        if (locationChanged) {
+          // Address changed! Invalidate old coordinates immediately to prevent stale coordinates
+          data.location.latitude = null;
+          data.location.longitude = null;
+
+          // Attempt re-geocoding for the new address
+          const geo = await GeocodingService.geocode(data.location);
+          if (geo) {
+            data.location.latitude = geo.latitude;
+            data.location.longitude = geo.longitude;
+          }
+        } else {
+          // Location did not change
+          if (prevLocation?.latitude != null && prevLocation?.longitude != null) {
+            // Keep existing coordinates without making an unnecessary external API call
+            data.location.latitude = prevLocation.latitude;
+            data.location.longitude = prevLocation.longitude;
+          } else {
+            // Coordinates were missing on this existing location: geocode it
+            const geo = await GeocodingService.geocode(data.location);
+            if (geo) {
+              data.location.latitude = geo.latitude;
+              data.location.longitude = geo.longitude;
+            } else {
+              data.location.latitude = null;
+              data.location.longitude = null;
+            }
+          }
+        }
+
+        doc.location = data.location;
+        if (data.location?.venueName && data.venue === undefined) {
+          doc.venue = data.location.venueName;
+        }
+        if (data.location?.address && data.address === undefined) {
+          doc.address = data.location.address;
+        }
       }
     }
     if (data.startDate !== undefined) doc.startDate = new Date(data.startDate);
