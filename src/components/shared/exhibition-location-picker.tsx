@@ -1,11 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { MapPin, Search, CheckCircle2, RotateCcw, X, AlertCircle, Loader2, Edit3, Globe } from 'lucide-react';
+import { MapPin, Search, CheckCircle2, RotateCcw, X, AlertCircle, Loader2, Edit3, Globe, Navigation } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ExoraMap } from '@/components/shared/exora-map';
-import { loadPlacesLibrary } from '@/lib/utils/google-maps-loader';
+import type { LocationSearchResult } from '@/lib/services/location-search.service';
 import { logger } from '@/lib/utils/logger';
 
 export interface SelectedExhibitionLocation {
@@ -29,55 +29,6 @@ export interface ExhibitionLocationPickerProps {
   label?: string;
 }
 
-interface PlacePredictionItem {
-  placeId: string;
-  mainText: string;
-  secondaryText: string;
-  fullText: string;
-  rawSuggestion?: Record<string, unknown>;
-}
-
-interface AddressComponentLike {
-  types?: string[];
-  longText?: string;
-  long_name?: string;
-}
-
-/**
- * Extracts address components from Google Places API New or Legacy PlaceResult
- */
-function parseAddressComponents(components: AddressComponentLike[] = []) {
-  let city = '';
-  let state = '';
-  let country = '';
-  let postalCode = '';
-
-  for (const c of components) {
-    const types: string[] = c.types || [];
-    const longText = c.longText || c.long_name || '';
-
-    if (types.includes('locality')) {
-      city = longText;
-    } else if (!city && (types.includes('sublocality_level_1') || types.includes('sublocality') || types.includes('administrative_area_level_2'))) {
-      city = longText;
-    }
-
-    if (types.includes('administrative_area_level_1')) {
-      state = longText;
-    }
-
-    if (types.includes('country')) {
-      country = longText;
-    }
-
-    if (types.includes('postal_code')) {
-      postalCode = longText;
-    }
-  }
-
-  return { city, state, country, postalCode };
-}
-
 export function ExhibitionLocationPicker({
   value,
   onChange,
@@ -88,51 +39,19 @@ export function ExhibitionLocationPicker({
 }: ExhibitionLocationPickerProps) {
   const [isChanging, setIsChanging] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [predictions, setPredictions] = React.useState<PlacePredictionItem[]>([]);
+  const [predictions, setPredictions] = React.useState<LocationSearchResult[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
-  const [isResolving, setIsResolving] = React.useState(false);
-  const [apiUnavailable, setApiUnavailable] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState<number>(-1);
   const [typedWithoutSelectionNotice, setTypedWithoutSelectionNotice] = React.useState(false);
   const [searchError, setSearchError] = React.useState<string | null>(null);
+  const [hasNoResults, setHasNoResults] = React.useState(false);
 
-  const sessionTokenRef = React.useRef<google.maps.places.AutocompleteSessionToken | null>(null);
-  const placesLibRef = React.useRef<typeof google.maps.places | null>(null);
+  // Store the canonical value when entering "change" mode to power "Keep current"
+  const [savedLocation, setSavedLocation] = React.useState<SelectedExhibitionLocation | null>(null);
   const debounceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
-
-  // Initialize Google Places Library and initial session token
-  React.useEffect(() => {
-    let isMounted = true;
-
-    async function initPlaces() {
-      try {
-        const placesLib = await loadPlacesLibrary();
-        if (!isMounted) return;
-
-        if (placesLib) {
-          placesLibRef.current = placesLib;
-          if (placesLib.AutocompleteSessionToken) {
-            sessionTokenRef.current = new placesLib.AutocompleteSessionToken();
-          }
-        } else {
-          setApiUnavailable(true);
-        }
-      } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        logger.warn('Google Places: Failed to load places library', { error: errorMsg });
-        if (isMounted) setApiUnavailable(true);
-      }
-    }
-
-    initPlaces();
-
-    return () => {
-      isMounted = false;
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    };
-  }, []);
 
   // Close dropdown on outside click
   React.useEffect(() => {
@@ -140,25 +59,39 @@ export function ExhibitionLocationPicker({
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setPredictions([]);
         setSelectedIndex(-1);
+        setHasNoResults(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch predictions as the user types
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
+  }, []);
+
+  // Fetch predictions with 350ms debounce and AbortController
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchQuery(query);
     setTypedWithoutSelectionNotice(false);
     setSearchError(null);
+    setHasNoResults(false);
     setSelectedIndex(-1);
 
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
 
-    if (!query.trim()) {
+    const trimmed = query.trim();
+    if (trimmed.length < 3) {
       setPredictions([]);
       setIsSearching(false);
       return;
@@ -167,223 +100,90 @@ export function ExhibitionLocationPicker({
     setIsSearching(true);
 
     debounceTimerRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       try {
-        const placesLib = placesLibRef.current;
-        if (!placesLib) {
+        const res = await fetch(`/api/location/search?q=${encodeURIComponent(trimmed)}&limit=6`, {
+          signal: controller.signal,
+          headers: { Accept: 'application/json' },
+        });
+
+        if (!res.ok) {
+          if (res.status === 403) {
+            setSearchError('Access denied: Administrator privileges required to search locations.');
+          } else if (res.status === 429) {
+            setSearchError('Search rate limit reached. Please wait a moment before searching again.');
+          } else {
+            setSearchError('Location search is temporarily unavailable. Please try again.');
+          }
+          setPredictions([]);
           setIsSearching(false);
           return;
         }
 
-        let newApiError: string | null = null;
-
-        // 1. Modern Places API (New): AutocompleteSuggestion
-        if (placesLib.AutocompleteSuggestion && typeof placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions === 'function') {
-          try {
-            const req: google.maps.places.AutocompleteRequest = {
-              input: query,
-            };
-            if (sessionTokenRef.current) {
-              req.sessionToken = sessionTokenRef.current;
-            }
-
-            const response = await placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
-            const rawSuggestions = (response?.suggestions || []) as unknown as Array<{
-              placePrediction?: {
-                placeId: string;
-                mainText?: { text?: string; toString?: () => string };
-                secondaryText?: { text?: string; toString?: () => string };
-                text?: { text?: string; toString?: () => string };
-                toPlace?: () => {
-                  fetchFields: (opts: { fields: string[] }) => Promise<void>;
-                  id?: string;
-                  displayName?: string;
-                  formattedAddress?: string;
-                  location?: { lat: () => number; lng: () => number };
-                  addressComponents?: AddressComponentLike[];
-                };
-              };
-            }>;
-
-            const mapped: PlacePredictionItem[] = [];
-            for (const s of rawSuggestions) {
-              const p = s.placePrediction;
-              if (p?.placeId) {
-                mapped.push({
-                  placeId: p.placeId,
-                  mainText: p.mainText?.text || (typeof p.mainText?.toString === 'function' ? p.mainText.toString() : '') || p.text?.text || '',
-                  secondaryText: p.secondaryText?.text || (typeof p.secondaryText?.toString === 'function' ? p.secondaryText.toString() : '') || '',
-                  fullText: p.text?.text || (typeof p.text?.toString === 'function' ? p.text.toString() : '') || '',
-                  rawSuggestion: s as Record<string, unknown>,
-                });
-              }
-            }
-
-            setPredictions(mapped);
-            setSearchError(null);
-            setIsSearching(false);
-            return;
-          } catch (err: unknown) {
-            newApiError = err instanceof Error ? err.message : String(err);
-            logger.warn('Google Places (New) fetchAutocompleteSuggestions failed; falling back to AutocompleteService', { error: newApiError });
-          }
-        }
-
-        // 2. Fallback: AutocompleteService
-        if (placesLib.AutocompleteService) {
-          try {
-            const service = new placesLib.AutocompleteService();
-            const req: google.maps.places.AutocompletionRequest = { input: query };
-            if (sessionTokenRef.current) req.sessionToken = sessionTokenRef.current;
-
-            service.getPlacePredictions(req, (results, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-                const mapped: PlacePredictionItem[] = results.map((r) => ({
-                  placeId: r.place_id,
-                  mainText: r.structured_formatting?.main_text || r.description,
-                  secondaryText: r.structured_formatting?.secondary_text || '',
-                  fullText: r.description,
-                }));
-                setPredictions(mapped);
-                setSearchError(null);
-              } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-                setPredictions([]);
-                setSearchError(null);
-              } else {
-                setPredictions([]);
-                const errorDetail = newApiError ? ` (${newApiError})` : '';
-                setSearchError(`Google Places is unavailable${errorDetail}. Check that Places API (New) is enabled and that this browser API key is authorized for Places API.`);
-              }
-              setIsSearching(false);
-            });
-            return;
-          } catch (legacyErr: unknown) {
-            const legacyErrorMsg = legacyErr instanceof Error ? legacyErr.message : String(legacyErr);
-            logger.warn('Google Places: AutocompleteService failed', { error: legacyErrorMsg });
-          }
-        }
-
-        setIsSearching(false);
-        setPredictions([]);
-        if (newApiError) {
-          setSearchError(`Google Places is unavailable: ${newApiError}. Check that Places API (New) is enabled and that this browser API key is authorized for Places API.`);
+        const body = await res.json();
+        if (body.success && Array.isArray(body.data)) {
+          setPredictions(body.data);
+          setHasNoResults(body.data.length === 0);
+          setSearchError(null);
+        } else {
+          setPredictions([]);
+          setHasNoResults(true);
         }
       } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        logger.warn('Google Places: Autocomplete lookup error', { error: errorMsg });
-        setIsSearching(false);
+        const error = err as Error;
+        if (error.name === 'AbortError') {
+          // Stale request aborted; do not treat as error
+          return;
+        }
+        logger.warn('Location Picker: search fetch error', { error: error.message || String(err) });
+        setSearchError('Unable to reach location search. Check your connection and try again.');
         setPredictions([]);
-        setSearchError(`Google Places is unavailable: ${errorMsg}. Check that Places API (New) is enabled and that this browser API key is authorized for Places API.`);
+      } finally {
+        setIsSearching(false);
       }
-    }, 250);
+    }, 350);
   };
 
-  // User selects an actual Google Place prediction
-  const handleSelectPrediction = async (prediction: PlacePredictionItem) => {
-    setIsResolving(true);
+  // User selects an authoritative suggestion
+  const handleSelectPrediction = (result: LocationSearchResult) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const selectedLocation: SelectedExhibitionLocation = {
+      venueName: result.venueName || result.displayName.split(',')[0]?.trim() || 'Exhibition Venue',
+      address: result.address || result.displayName,
+      city: result.city || '',
+      state: result.state || '',
+      country: result.country || 'India',
+      postalCode: result.postalCode || '',
+      latitude: result.latitude,
+      longitude: result.longitude,
+      placeId: result.providerId,
+    };
+
+    onChange(selectedLocation);
+    setIsChanging(false);
+    setSearchQuery('');
     setPredictions([]);
     setTypedWithoutSelectionNotice(false);
-
-    try {
-      const placesLib = placesLibRef.current;
-      let selectedLocation: SelectedExhibitionLocation | null = null;
-
-      // Modern Places API (New): prediction.toPlace() & fetchFields()
-      const rawPrediction = (prediction.rawSuggestion as {
-        placePrediction?: {
-          toPlace?: () => {
-            fetchFields: (opts: { fields: string[] }) => Promise<void>;
-            id?: string;
-            displayName?: string;
-            formattedAddress?: string;
-            location?: { lat: () => number; lng: () => number };
-            addressComponents?: AddressComponentLike[];
-          };
-        };
-      } | undefined)?.placePrediction;
-      if (rawPrediction && typeof rawPrediction.toPlace === 'function') {
-        const place = rawPrediction.toPlace();
-        await place.fetchFields({
-          fields: ['id', 'displayName', 'formattedAddress', 'location', 'addressComponents'],
-        });
-
-        const lat = typeof place.location?.lat === 'function' ? place.location.lat() : place.location?.lat;
-        const lng = typeof place.location?.lng === 'function' ? place.location.lng() : place.location?.lng;
-
-        const parsed = parseAddressComponents(place.addressComponents);
-
-        selectedLocation = {
-          venueName: place.displayName || prediction.mainText || 'Exhibition Venue',
-          address: place.formattedAddress || prediction.fullText,
-          city: parsed.city || prediction.secondaryText.split(',')[0]?.trim() || '',
-          state: parsed.state || '',
-          country: parsed.country || 'India',
-          postalCode: parsed.postalCode || '',
-          latitude: typeof lat === 'number' ? Math.round(lat * 1e6) / 1e6 : null,
-          longitude: typeof lng === 'number' ? Math.round(lng * 1e6) / 1e6 : null,
-          placeId: place.id || prediction.placeId,
-        };
-      } else if (placesLib?.PlacesService) {
-        // Fallback: PlacesService getDetails
-        const dummyNode = document.createElement('div');
-        const service = new placesLib.PlacesService(dummyNode);
-
-        const details: google.maps.places.PlaceResult | null = await new Promise((resolve) => {
-          service.getDetails(
-            {
-              placeId: prediction.placeId,
-              fields: ['place_id', 'name', 'formatted_address', 'geometry', 'address_components'],
-              sessionToken: sessionTokenRef.current || undefined,
-            },
-            (result, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && result) resolve(result);
-              else resolve(null);
-            }
-          );
-        });
-
-        if (details) {
-          const lat = details.geometry?.location?.lat();
-          const lng = details.geometry?.location?.lng();
-          const parsed = parseAddressComponents(details.address_components as AddressComponentLike[]);
-
-          selectedLocation = {
-            venueName: details.name || prediction.mainText,
-            address: details.formatted_address || prediction.fullText,
-            city: parsed.city || prediction.secondaryText.split(',')[0]?.trim() || '',
-            state: parsed.state || '',
-            country: parsed.country || 'India',
-            postalCode: parsed.postalCode || '',
-            latitude: typeof lat === 'number' ? Math.round(lat * 1e6) / 1e6 : null,
-            longitude: typeof lng === 'number' ? Math.round(lng * 1e6) / 1e6 : null,
-            placeId: details.place_id || prediction.placeId,
-          };
-        }
-      }
-
-      if (selectedLocation) {
-        onChange(selectedLocation);
-        setIsChanging(false);
-        setSearchQuery('');
-
-        // Refresh session token for subsequent searches
-        if (placesLib?.AutocompleteSessionToken) {
-          sessionTokenRef.current = new placesLib.AutocompleteSessionToken();
-        }
-      } else {
-        setTypedWithoutSelectionNotice(true);
-      }
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      logger.warn('Google Places: Failed to resolve place details', { error: errorMsg });
-      setTypedWithoutSelectionNotice(true);
-    } finally {
-      setIsResolving(false);
-    }
+    setSearchError(null);
+    setHasNoResults(false);
   };
 
-  // Keyboard navigation for predictions
+  // Keyboard navigation for suggestions
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (predictions.length === 0) return;
+    if (predictions.length === 0) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (searchQuery.trim().length >= 3) {
+          setTypedWithoutSelectionNotice(true);
+        }
+      }
+      return;
+    }
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -404,21 +204,27 @@ export function ExhibitionLocationPicker({
     }
   };
 
-  const handleClear = () => {
-    onChange(null);
+  const handleStartChange = () => {
+    setSavedLocation(value || null);
+    setIsChanging(true);
     setSearchQuery('');
     setPredictions([]);
-    setIsChanging(true);
     setTypedWithoutSelectionNotice(false);
+    setSearchError(null);
+    setHasNoResults(false);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
-  const handleStartChange = () => {
-    setIsChanging(true);
+  const handleKeepCurrent = () => {
+    setIsChanging(false);
     setSearchQuery('');
     setPredictions([]);
     setTypedWithoutSelectionNotice(false);
-    setTimeout(() => inputRef.current?.focus(), 50);
+    setSearchError(null);
+    setHasNoResults(false);
+    if (savedLocation) {
+      onChange(savedLocation);
+    }
   };
 
   const handleCancelChange = () => {
@@ -426,6 +232,19 @@ export function ExhibitionLocationPicker({
     setSearchQuery('');
     setPredictions([]);
     setTypedWithoutSelectionNotice(false);
+    setSearchError(null);
+    setHasNoResults(false);
+  };
+
+  const handleClear = () => {
+    onChange(null);
+    setSearchQuery('');
+    setPredictions([]);
+    setIsChanging(true);
+    setTypedWithoutSelectionNotice(false);
+    setSearchError(null);
+    setHasNoResults(false);
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const hasValidCoordinates =
@@ -438,7 +257,7 @@ export function ExhibitionLocationPicker({
     value.longitude >= -180 &&
     value.longitude <= 180;
 
-  // ── RENDER CASE 1: CONFIRMED / EXISTING LOCATION DISPLAY ──
+  // ── RENDER CASE 1: CONFIRMED / SELECTED LOCATION DISPLAY ──
   if (value && !isChanging) {
     return (
       <Card className="border border-gray-800 bg-gray-900 shadow-sm overflow-hidden">
@@ -495,11 +314,6 @@ export function ExhibitionLocationPicker({
                 {value.state && <span className="bg-gray-850 px-2 py-0.5 rounded border border-gray-800">{value.state}</span>}
                 {value.country && <span className="bg-gray-850 px-2 py-0.5 rounded border border-gray-800">{value.country}</span>}
                 {value.postalCode && <span className="bg-gray-850 px-2 py-0.5 rounded border border-gray-800">{value.postalCode}</span>}
-                {value.placeId && (
-                  <span className="text-[10px] text-gray-400 font-mono" title={`Google Place ID: ${value.placeId}`}>
-                    ID: {value.placeId.slice(0, 14)}…
-                  </span>
-                )}
               </div>
             </div>
 
@@ -515,7 +329,7 @@ export function ExhibitionLocationPicker({
             )}
           </div>
 
-          {/* Map Preview */}
+          {/* Leaflet Map Preview */}
           <div className="pt-2">
             {hasValidCoordinates ? (
               <div className="rounded-xl overflow-hidden border border-gray-800 shadow-xs">
@@ -620,12 +434,12 @@ export function ExhibitionLocationPicker({
           </p>
         </div>
 
-        {value && isChanging ? (
+        {savedLocation && isChanging ? (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            onClick={handleCancelChange}
+            onClick={handleKeepCurrent}
             disabled={disabled}
             leftIcon={<RotateCcw size={13} />}
           >
@@ -647,117 +461,123 @@ export function ExhibitionLocationPicker({
       </CardHeader>
 
       <CardContent className="p-5 space-y-3 relative" ref={containerRef}>
-        {apiUnavailable ? (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300 text-xs space-y-1">
-            <div className="flex items-center gap-2 font-semibold">
-              <AlertCircle size={15} />
-              <span>Location search is temporarily unavailable</span>
-            </div>
-            <p className="text-[11px] text-amber-200/80 leading-relaxed">
-              Google Places API is initializing or requires authorization. Please verify <code className="font-mono text-white">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> has Places API (New) enabled.
-            </p>
-          </div>
-        ) : (
-          <div className="relative">
-            {/* Search Input */}
-            <div className="relative flex items-center">
-              <div className="absolute left-3.5 text-gray-400 pointer-events-none">
-                {isSearching || isResolving ? (
-                  <Loader2 size={16} className="animate-spin text-[#1557FF]" />
-                ) : (
-                  <Search size={16} />
-                )}
-              </div>
-              <input
-                ref={inputRef}
-                type="text"
-                role="combobox"
-                value={searchQuery}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                disabled={disabled || isResolving}
-                placeholder="Search venue, exhibition centre, or address…"
-                className={`w-full h-11 pl-10 pr-10 text-sm rounded-xl border bg-gray-950 text-gray-100 placeholder:text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-[#1557FF]/40 ${
-                  error ? 'border-rose-500 focus:border-rose-500' : 'border-gray-800 focus:border-[#1557FF]'
-                }`}
-                aria-autocomplete="list"
-                aria-controls="places-prediction-list"
-                aria-expanded={predictions.length > 0}
-                aria-label="Search venue or address"
-              />
-              {searchQuery && !isResolving && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setPredictions([]);
-                    setTypedWithoutSelectionNotice(false);
-                    inputRef.current?.focus();
-                  }}
-                  className="absolute right-3 p-1 rounded-md text-gray-400 hover:text-gray-200 transition-colors"
-                  title="Clear input"
-                >
-                  <X size={15} />
-                </button>
+        <div className="relative">
+          {/* Search Input */}
+          <div className="relative flex items-center">
+            <div className="absolute left-3.5 text-gray-400 pointer-events-none">
+              {isSearching ? (
+                <Loader2 size={16} className="animate-spin text-[#1557FF]" />
+              ) : (
+                <Search size={16} />
               )}
             </div>
-
-            {/* Suggestions Dropdown */}
-            {predictions.length > 0 && (
-              <div
-                id="places-prediction-list"
-                role="listbox"
-                className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden divide-y divide-gray-850 animate-in fade-in-50 duration-150"
+            <input
+              ref={inputRef}
+              type="text"
+              role="combobox"
+              value={searchQuery}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              disabled={disabled}
+              placeholder="Search venue, exhibition centre, or address (min 3 chars)…"
+              className={`w-full h-11 pl-10 pr-10 text-sm rounded-xl border bg-gray-950 text-gray-100 placeholder:text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-[#1557FF]/40 ${
+                error ? 'border-rose-500 focus:border-rose-500' : 'border-gray-800 focus:border-[#1557FF]'
+              }`}
+              aria-autocomplete="list"
+              aria-controls="photon-prediction-list"
+              aria-expanded={predictions.length > 0}
+              aria-label="Search venue or address"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setPredictions([]);
+                  setTypedWithoutSelectionNotice(false);
+                  setHasNoResults(false);
+                  inputRef.current?.focus();
+                }}
+                className="absolute right-3 p-1 rounded-md text-gray-400 hover:text-gray-200 transition-colors"
+                title="Clear input"
               >
-                <div className="max-h-64 overflow-y-auto">
-                  {predictions.map((p, index) => {
-                    const isHighlighted = selectedIndex === index;
-                    return (
-                      <button
-                        key={p.placeId || index}
-                        type="button"
-                        role="option"
-                        aria-selected={isHighlighted}
-                        onClick={() => handleSelectPrediction(p)}
-                        onMouseEnter={() => setSelectedIndex(index)}
-                        className={`w-full px-4 py-3 text-left flex items-start gap-3 transition-colors cursor-pointer ${
-                          isHighlighted ? 'bg-gray-850' : 'hover:bg-gray-850/60'
-                        }`}
-                      >
-                        <div className="p-1.5 rounded-lg bg-gray-800 text-[#1557FF] shrink-0 mt-0.5">
-                          <MapPin size={14} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold text-gray-100 truncate">
-                            {p.mainText}
-                          </div>
-                          {p.secondaryText && (
-                            <div className="text-[11px] text-gray-400 truncate mt-0.5">
-                              {p.secondaryText}
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Google Attribution */}
-                <div className="px-3 py-1.5 bg-gray-950/80 text-[10px] text-gray-500 text-right flex items-center justify-end gap-1.5">
-                  <span>Powered by</span>
-                  <span className="font-semibold text-gray-400">Google</span>
-                </div>
-              </div>
+                <X size={15} />
+              </button>
             )}
           </div>
-        )}
 
-        {/* Explicit Google Places Search Error */}
+          {/* Suggestions Dropdown */}
+          {predictions.length > 0 && (
+            <div
+              id="photon-prediction-list"
+              role="listbox"
+              className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden divide-y divide-gray-850 animate-in fade-in-50 duration-150"
+            >
+              <div className="max-h-72 overflow-y-auto">
+                {predictions.map((p, index) => {
+                  const isHighlighted = selectedIndex === index;
+                  return (
+                    <button
+                      key={p.providerId || `${p.latitude},${p.longitude}`}
+                      type="button"
+                      role="option"
+                      aria-selected={isHighlighted}
+                      onClick={() => handleSelectPrediction(p)}
+                      onMouseEnter={() => setSelectedIndex(index)}
+                      className={`w-full px-4 py-3 text-left flex items-start gap-3 transition-colors cursor-pointer ${
+                        isHighlighted ? 'bg-gray-850' : 'hover:bg-gray-850/60'
+                      }`}
+                    >
+                      <div className="p-1.5 rounded-lg bg-gray-800 text-[#1557FF] shrink-0 mt-0.5">
+                        <MapPin size={14} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-gray-100 truncate">
+                            {p.venueName || p.displayName.split(',')[0]}
+                          </span>
+                          {p.category && (
+                            <span className="text-[9px] uppercase font-semibold px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 shrink-0">
+                              {p.category}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-gray-400 truncate mt-0.5">
+                          {p.address}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* OpenStreetMap / Photon Attribution Footer */}
+              <div className="px-3 py-1.5 bg-gray-950/90 text-[10px] text-gray-500 text-right flex items-center justify-between border-t border-gray-850">
+                <span className="flex items-center gap-1 text-gray-500">
+                  <Navigation size={10} />
+                  <span>Select result to attach coordinates</span>
+                </span>
+                <span>
+                  Data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:underline">OpenStreetMap</a> contributors
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* No Results Notice */}
+          {hasNoResults && !isSearching && searchQuery.trim().length >= 3 && (
+            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-gray-900 border border-gray-800 rounded-xl shadow-lg p-4 text-center text-xs text-gray-400">
+              No matching locations found. Try checking the spelling or searching for the city name.
+            </div>
+          )}
+        </div>
+
+        {/* Search Error State */}
         {searchError && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-start gap-2">
             <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-400" />
             <div className="space-y-0.5">
-              <span className="font-semibold block">Google Places lookup issue</span>
+              <span className="font-semibold block">Location search unavailable</span>
               <span className="text-[11px] text-amber-200/90 leading-relaxed block">{searchError}</span>
             </div>
           </div>
@@ -775,14 +595,14 @@ export function ExhibitionLocationPicker({
         {typedWithoutSelectionNotice && (
           <p className="text-xs text-amber-400 flex items-center gap-1.5 pt-0.5">
             <AlertCircle size={13} />
-            <span>Please select a location from the suggestions to confirm coordinates.</span>
+            <span>Please select a location from the search results to confirm coordinates.</span>
           </p>
         )}
 
         {/* Helper Instructions */}
         {!value && (
           <p className="text-[11px] text-gray-500 leading-relaxed">
-            Start typing the name of an exhibition centre, convention hall, or city address. Select a result to automatically capture verified coordinates and address telemetry.
+            Start typing the name of an exhibition centre, convention hall, or city address (minimum 3 characters). Select a result from the suggestions to automatically attach verified coordinates.
           </p>
         )}
       </CardContent>

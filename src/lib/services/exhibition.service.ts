@@ -7,7 +7,7 @@ import { TicketScan as TicketScanModel } from '@/lib/db/models/ticket-scan.model
 import { connectToDatabase } from '@/lib/db/connection';
 import { AuditService } from '@/lib/services/audit.service';
 import { NotificationService } from '@/lib/services/notification.service';
-import { GeocodingService } from '@/lib/services/geocoding.service';
+import { LocationSearchService } from '@/lib/services/location-search.service';
 import { escapeRegex } from '@/lib/utils/sanitize';
 import type { Exhibition, CreateExhibitionInput, UpdateExhibitionInput } from '@/types/exhibition.types';
 import type { PaginationParams, PaginationMeta } from '@/types/api.types';
@@ -35,26 +35,28 @@ export const ExhibitionService = {
       slug = `${baseSlug}-${counter++}`;
     }
 
-    // 2. Resolve location coordinates if provided
+    // 2. Resolve and validate location coordinates if provided
     if (data.location) {
-      if (data.location.placeId) {
-        // Resolve placeId server-side
-        const resolved = await GeocodingService.resolvePlaceId(data.location.placeId);
-        if (resolved) {
-          data.location.latitude = resolved.latitude;
-          data.location.longitude = resolved.longitude;
-        } else if (data.location.latitude != null && data.location.longitude != null) {
-          // Validate client-provided coordinates from Google Places selection
-          const lat = data.location.latitude;
-          const lng = data.location.longitude;
-          if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-            data.location.latitude = null;
-            data.location.longitude = null;
-          }
+      if (data.location.latitude != null && data.location.longitude != null) {
+        // Validate coordinates from verified location selection
+        const lat = data.location.latitude;
+        const lng = data.location.longitude;
+        if (
+          typeof lat !== 'number' ||
+          typeof lng !== 'number' ||
+          isNaN(lat) ||
+          isNaN(lng) ||
+          lat < -90 ||
+          lat > 90 ||
+          lng < -180 ||
+          lng > 180
+        ) {
+          data.location.latitude = null;
+          data.location.longitude = null;
         }
-      } else if (data.location.latitude == null || data.location.longitude == null) {
-        // Fallback text geocode only when placeId is not present and coordinates are missing
-        const geo = await GeocodingService.geocode(data.location);
+      } else {
+        // Fallback geocode when coordinates are not yet attached
+        const geo = await LocationSearchService.geocode(data.location);
         if (geo) {
           data.location.latitude = geo.latitude;
           data.location.longitude = geo.longitude;
@@ -218,34 +220,32 @@ export const ExhibitionService = {
         doc.location = null;
       } else {
         const prevLocation = doc.location;
-        const locationChanged = GeocodingService.hasLocationChanged(prevLocation, data.location);
+        const locationChanged = LocationSearchService.hasLocationChanged(prevLocation, data.location);
 
         if (locationChanged) {
-          if (data.location.placeId) {
-            // New Google Place selected! Resolve server-side
-            const resolved = await GeocodingService.resolvePlaceId(data.location.placeId);
-            if (resolved) {
-              data.location.latitude = resolved.latitude;
-              data.location.longitude = resolved.longitude;
-            } else if (data.location.latitude != null && data.location.longitude != null) {
-              // Validate client-provided coordinates from Google Places selection
-              const lat = data.location.latitude;
-              const lng = data.location.longitude;
-              if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-                data.location.latitude = null;
-                data.location.longitude = null;
-              }
-            } else {
+          if (data.location.latitude != null && data.location.longitude != null) {
+            // Validate client-provided coordinates from verified selection
+            const lat = data.location.latitude;
+            const lng = data.location.longitude;
+            if (
+              typeof lat !== 'number' ||
+              typeof lng !== 'number' ||
+              isNaN(lat) ||
+              isNaN(lng) ||
+              lat < -90 ||
+              lat > 90 ||
+              lng < -180 ||
+              lng > 180
+            ) {
               data.location.latitude = null;
               data.location.longitude = null;
             }
           } else {
-            // Text address changed! Invalidate old coordinates immediately to prevent stale coordinates
+            // Address changed and coordinates not attached: geocode
             data.location.latitude = null;
             data.location.longitude = null;
 
-            // Attempt re-geocoding for the new address
-            const geo = await GeocodingService.geocode(data.location);
+            const geo = await LocationSearchService.geocode(data.location);
             if (geo) {
               data.location.latitude = geo.latitude;
               data.location.longitude = geo.longitude;
@@ -260,15 +260,9 @@ export const ExhibitionService = {
             if (prevLocation.placeId && !data.location.placeId) {
               data.location.placeId = prevLocation.placeId;
             }
-          } else if (data.location.placeId) {
-            const resolved = await GeocodingService.resolvePlaceId(data.location.placeId);
-            if (resolved) {
-              data.location.latitude = resolved.latitude;
-              data.location.longitude = resolved.longitude;
-            }
           } else {
             // Coordinates were missing on this existing location: geocode it
-            const geo = await GeocodingService.geocode(data.location);
+            const geo = await LocationSearchService.geocode(data.location);
             if (geo) {
               data.location.latitude = geo.latitude;
               data.location.longitude = geo.longitude;

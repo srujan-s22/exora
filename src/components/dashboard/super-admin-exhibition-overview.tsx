@@ -40,7 +40,7 @@ export interface SuperAdminExhibitionOverviewProps {
 }
 
 /**
- * Robust Error Boundary to isolate Google Maps failures
+ * Robust Error Boundary to isolate map rendering failures
  * and prevent dashboard crashes.
  */
 interface ErrorBoundaryProps {
@@ -64,7 +64,7 @@ class MapErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundary
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    logger.warn('Google Maps ErrorBoundary caught error', { error: error.message, componentStack: errorInfo.componentStack });
+    logger.warn('ExoraMap ErrorBoundary caught error', { error: error.message, componentStack: errorInfo.componentStack });
   }
 
   render() {
