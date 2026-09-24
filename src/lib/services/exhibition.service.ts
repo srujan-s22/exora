@@ -66,8 +66,8 @@ export const ExhibitionService = {
     }
 
     // 3. Create the Exhibition document
-    const venue = data.venue || data.location?.venueName || '';
-    const address = data.address || data.location?.address || '';
+    const venue = data.location?.venueName || data.venue || '';
+    const address = data.location?.address || data.address || '';
 
     const doc = await ExhibitionModel.create({
       ...data,
@@ -280,10 +280,10 @@ export const ExhibitionService = {
         }
 
         doc.location = data.location;
-        if (data.location?.venueName && data.venue === undefined) {
+        if (data.location?.venueName) {
           doc.venue = data.location.venueName;
         }
-        if (data.location?.address && data.address === undefined) {
+        if (data.location?.address) {
           doc.address = data.location.address;
         }
       }

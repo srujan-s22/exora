@@ -23,5 +23,6 @@ Master index of all completed engineering updates for the **Exora** platform.
 | **[U013](./updates/u013-super-admin-exhibition-map-overview.md)** | 2026-09-24 | Super Admin Exhibition Map Overview (Step 3) | Implemented | Unified control plane with two-column overview, bidirectional card-map sync, 3-state location badges, and isolated map errors. |
 | **[U014](./updates/u014-google-places-location-picker.md)** | 2026-09-24 | Google Places Exhibition Location Picker | Implemented | Replaced manual 6-field location entry with Google Places Autocomplete picker, placeId support, coordinates verification, and ExoraMap preview. |
 | **[U015](./updates/u015-csp-google-places-compatibility.md)** | 2026-09-24 | Content Security Policy (CSP) Google Maps & Places Compatibility | Implemented | Updated centralized CSP in src/proxy.ts to allow Google Maps JS, Places API (New), tile images, and map workers. |
+| **[U016](./updates/u016-google-places-flow-diagnostics-and-sync-fix.md)** | 2026-09-24 | Google Places Flow Diagnostics, Error Transparency & Location Sync Fix | Implemented | Diagnosed Google Places production 403 root cause, added dual-tier fallback and explicit error banners, hardened ExhibitionService location persistence, and updated detail page rendering. |
 
 

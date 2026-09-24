@@ -453,10 +453,9 @@ export default function ExhibitionDetailPage() {
                           <div>
                             {exhibition.location ? (
                               <>
-                                <span className="font-semibold text-gray-100 block">{exhibition.location.venueName}</span>
+                                <span className="font-semibold text-gray-100 block">{exhibition.location.venueName || 'Venue Unassigned'}</span>
                                 <span className="block text-gray-400 text-[11px] mt-0.5">
-                                  {[
-                                    exhibition.location.address,
+                                  {exhibition.location.address || [
                                     exhibition.location.city,
                                     exhibition.location.state,
                                     exhibition.location.country,
@@ -464,15 +463,30 @@ export default function ExhibitionDetailPage() {
                                   ].filter(Boolean).join(', ')}
                                 </span>
                               </>
+                            ) : exhibition.venue || exhibition.address ? (
+                              <>
+                                <span className="font-semibold text-gray-100 block">{exhibition.venue || 'Venue Unassigned'}</span>
+                                {exhibition.address && (
+                                  <span className="block text-gray-400 text-[11px] mt-0.5">{exhibition.address}</span>
+                                )}
+                              </>
                             ) : (
-                              <span>{exhibition.venue} {exhibition.address ? `(${exhibition.address})` : ''}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-amber-400 text-xs">Location not configured</span>
+                                <Link
+                                  href={`/admin/exhibitions/${id}/edit`}
+                                  className="text-xs text-[#1557FF] hover:underline font-semibold"
+                                >
+                                  [ Add location ]
+                                </Link>
+                              </div>
                             )}
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {exhibition.location?.latitude != null && exhibition.location?.longitude != null && (
+                    {exhibition.location?.latitude != null && exhibition.location?.longitude != null ? (
                       <div className="pt-3 border-t border-gray-800/60 space-y-2">
                         <span className="font-semibold text-gray-400 block text-xs">Venue Map Location</span>
                         <ExoraMap
@@ -488,6 +502,16 @@ export default function ExhibitionDetailPage() {
                           ]}
                           className="w-full h-52 rounded-lg overflow-hidden border border-gray-800"
                         />
+                      </div>
+                    ) : (
+                      <div className="pt-3 border-t border-gray-800/60 flex items-center justify-between text-xs text-gray-500">
+                        <span>Map preview unavailable (no verified coordinates)</span>
+                        <Link
+                          href={`/admin/exhibitions/${id}/edit`}
+                          className="text-[#1557FF] hover:underline font-medium"
+                        >
+                          Configure location
+                        </Link>
                       </div>
                     )}
                   </CardContent>

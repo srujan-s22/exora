@@ -9,6 +9,7 @@ let isConfigured = false;
  * Avoids duplicate script initialization.
  */
 export function configureGoogleMaps(apiKey: string, mapId?: string) {
+  if (typeof window === 'undefined') return;
   if (!isConfigured) {
     setOptions({
       key: apiKey,

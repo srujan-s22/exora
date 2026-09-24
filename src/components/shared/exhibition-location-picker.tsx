@@ -94,6 +94,7 @@ export function ExhibitionLocationPicker({
   const [apiUnavailable, setApiUnavailable] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState<number>(-1);
   const [typedWithoutSelectionNotice, setTypedWithoutSelectionNotice] = React.useState(false);
+  const [searchError, setSearchError] = React.useState<string | null>(null);
 
   const sessionTokenRef = React.useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   const placesLibRef = React.useRef<typeof google.maps.places | null>(null);
@@ -150,6 +151,7 @@ export function ExhibitionLocationPicker({
     const query = e.target.value;
     setSearchQuery(query);
     setTypedWithoutSelectionNotice(false);
+    setSearchError(null);
     setSelectedIndex(-1);
 
     if (debounceTimerRef.current) {
@@ -172,81 +174,105 @@ export function ExhibitionLocationPicker({
           return;
         }
 
+        let newApiError: string | null = null;
+
         // 1. Modern Places API (New): AutocompleteSuggestion
         if (placesLib.AutocompleteSuggestion && typeof placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions === 'function') {
-          const req: google.maps.places.AutocompleteRequest = {
-            input: query,
-          };
-          if (sessionTokenRef.current) {
-            req.sessionToken = sessionTokenRef.current;
-          }
-
-          const response = await placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
-          const rawSuggestions = (response?.suggestions || []) as unknown as Array<{
-            placePrediction?: {
-              placeId: string;
-              mainText?: { text?: string; toString?: () => string };
-              secondaryText?: { text?: string; toString?: () => string };
-              text?: { text?: string; toString?: () => string };
-              toPlace?: () => {
-                fetchFields: (opts: { fields: string[] }) => Promise<void>;
-                id?: string;
-                displayName?: string;
-                formattedAddress?: string;
-                location?: { lat: () => number; lng: () => number };
-                addressComponents?: AddressComponentLike[];
-              };
+          try {
+            const req: google.maps.places.AutocompleteRequest = {
+              input: query,
             };
-          }>;
-
-          const mapped: PlacePredictionItem[] = [];
-          for (const s of rawSuggestions) {
-            const p = s.placePrediction;
-            if (p?.placeId) {
-              mapped.push({
-                placeId: p.placeId,
-                mainText: p.mainText?.text || (typeof p.mainText?.toString === 'function' ? p.mainText.toString() : '') || p.text?.text || '',
-                secondaryText: p.secondaryText?.text || (typeof p.secondaryText?.toString === 'function' ? p.secondaryText.toString() : '') || '',
-                fullText: p.text?.text || (typeof p.text?.toString === 'function' ? p.text.toString() : '') || '',
-                rawSuggestion: s as Record<string, unknown>,
-              });
+            if (sessionTokenRef.current) {
+              req.sessionToken = sessionTokenRef.current;
             }
-          }
 
-          setPredictions(mapped);
-          setIsSearching(false);
-          return;
+            const response = await placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
+            const rawSuggestions = (response?.suggestions || []) as unknown as Array<{
+              placePrediction?: {
+                placeId: string;
+                mainText?: { text?: string; toString?: () => string };
+                secondaryText?: { text?: string; toString?: () => string };
+                text?: { text?: string; toString?: () => string };
+                toPlace?: () => {
+                  fetchFields: (opts: { fields: string[] }) => Promise<void>;
+                  id?: string;
+                  displayName?: string;
+                  formattedAddress?: string;
+                  location?: { lat: () => number; lng: () => number };
+                  addressComponents?: AddressComponentLike[];
+                };
+              };
+            }>;
+
+            const mapped: PlacePredictionItem[] = [];
+            for (const s of rawSuggestions) {
+              const p = s.placePrediction;
+              if (p?.placeId) {
+                mapped.push({
+                  placeId: p.placeId,
+                  mainText: p.mainText?.text || (typeof p.mainText?.toString === 'function' ? p.mainText.toString() : '') || p.text?.text || '',
+                  secondaryText: p.secondaryText?.text || (typeof p.secondaryText?.toString === 'function' ? p.secondaryText.toString() : '') || '',
+                  fullText: p.text?.text || (typeof p.text?.toString === 'function' ? p.text.toString() : '') || '',
+                  rawSuggestion: s as Record<string, unknown>,
+                });
+              }
+            }
+
+            setPredictions(mapped);
+            setSearchError(null);
+            setIsSearching(false);
+            return;
+          } catch (err: unknown) {
+            newApiError = err instanceof Error ? err.message : String(err);
+            logger.warn('Google Places (New) fetchAutocompleteSuggestions failed; falling back to AutocompleteService', { error: newApiError });
+          }
         }
 
         // 2. Fallback: AutocompleteService
         if (placesLib.AutocompleteService) {
-          const service = new placesLib.AutocompleteService();
-          const req: google.maps.places.AutocompletionRequest = { input: query };
-          if (sessionTokenRef.current) req.sessionToken = sessionTokenRef.current;
+          try {
+            const service = new placesLib.AutocompleteService();
+            const req: google.maps.places.AutocompletionRequest = { input: query };
+            if (sessionTokenRef.current) req.sessionToken = sessionTokenRef.current;
 
-          service.getPlacePredictions(req, (results, status) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-              const mapped: PlacePredictionItem[] = results.map((r) => ({
-                placeId: r.place_id,
-                mainText: r.structured_formatting?.main_text || r.description,
-                secondaryText: r.structured_formatting?.secondary_text || '',
-                fullText: r.description,
-              }));
-              setPredictions(mapped);
-            } else {
-              setPredictions([]);
-            }
-            setIsSearching(false);
-          });
-          return;
+            service.getPlacePredictions(req, (results, status) => {
+              if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                const mapped: PlacePredictionItem[] = results.map((r) => ({
+                  placeId: r.place_id,
+                  mainText: r.structured_formatting?.main_text || r.description,
+                  secondaryText: r.structured_formatting?.secondary_text || '',
+                  fullText: r.description,
+                }));
+                setPredictions(mapped);
+                setSearchError(null);
+              } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+                setPredictions([]);
+                setSearchError(null);
+              } else {
+                setPredictions([]);
+                const errorDetail = newApiError ? ` (${newApiError})` : '';
+                setSearchError(`Google Places is unavailable${errorDetail}. Check that Places API (New) is enabled and that this browser API key is authorized for Places API.`);
+              }
+              setIsSearching(false);
+            });
+            return;
+          } catch (legacyErr: unknown) {
+            const legacyErrorMsg = legacyErr instanceof Error ? legacyErr.message : String(legacyErr);
+            logger.warn('Google Places: AutocompleteService failed', { error: legacyErrorMsg });
+          }
         }
 
         setIsSearching(false);
+        setPredictions([]);
+        if (newApiError) {
+          setSearchError(`Google Places is unavailable: ${newApiError}. Check that Places API (New) is enabled and that this browser API key is authorized for Places API.`);
+        }
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         logger.warn('Google Places: Autocomplete lookup error', { error: errorMsg });
         setIsSearching(false);
         setPredictions([]);
+        setSearchError(`Google Places is unavailable: ${errorMsg}. Check that Places API (New) is enabled and that this browser API key is authorized for Places API.`);
       }
     }, 250);
   };
@@ -723,6 +749,17 @@ export function ExhibitionLocationPicker({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Explicit Google Places Search Error */}
+        {searchError && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-start gap-2">
+            <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-400" />
+            <div className="space-y-0.5">
+              <span className="font-semibold block">Google Places lookup issue</span>
+              <span className="text-[11px] text-amber-200/90 leading-relaxed block">{searchError}</span>
+            </div>
           </div>
         )}
 
