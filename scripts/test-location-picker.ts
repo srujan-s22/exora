@@ -243,6 +243,16 @@ async function runTests() {
   const changedLoc = { ...locA, placeId: 'ChIJdifferentPlaceId' };
   assert(GeocodingService.hasLocationChanged(locA, changedLoc), 'GeocodingService detects changed placeId');
 
+  // TEST 15: Content Security Policy allows Google Maps & Places
+  console.log('\nTest 15: Content Security Policy allows Google Maps & Places');
+  const fs = await import('fs');
+  const path = await import('path');
+  const proxyFile = fs.readFileSync(path.join(process.cwd(), 'src/proxy.ts'), 'utf-8');
+  assert(proxyFile.includes("https://maps.googleapis.com"), 'CSP includes https://maps.googleapis.com');
+  assert(proxyFile.includes("https://places.googleapis.com"), 'CSP includes https://places.googleapis.com');
+  assert(proxyFile.includes("https://maps.gstatic.com"), 'CSP includes https://maps.gstatic.com');
+  assert(proxyFile.includes("worker-src 'self' blob:"), 'CSP worker-src allows blob: for map workers');
+
   console.log('\n====================================================');
   console.log(`TEST RESULTS: ${passedTests} / ${totalTests} passed`);
   console.log('====================================================');

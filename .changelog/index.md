@@ -22,5 +22,6 @@ Master index of all completed engineering updates for the **Exora** platform.
 | **[U012](./updates/u012-location-map-infrastructure.md)** | 2026-09-24 | Location Geocoding & Map Infrastructure (Step 2) | Implemented | Added Google Maps Platform geocoding service, stale coordinate protection, caching, and reusable ExoraMap component. |
 | **[U013](./updates/u013-super-admin-exhibition-map-overview.md)** | 2026-09-24 | Super Admin Exhibition Map Overview (Step 3) | Implemented | Unified control plane with two-column overview, bidirectional card-map sync, 3-state location badges, and isolated map errors. |
 | **[U014](./updates/u014-google-places-location-picker.md)** | 2026-09-24 | Google Places Exhibition Location Picker | Implemented | Replaced manual 6-field location entry with Google Places Autocomplete picker, placeId support, coordinates verification, and ExoraMap preview. |
+| **[U015](./updates/u015-csp-google-places-compatibility.md)** | 2026-09-24 | Content Security Policy (CSP) Google Maps & Places Compatibility | Implemented | Updated centralized CSP in src/proxy.ts to allow Google Maps JS, Places API (New), tile images, and map workers. |
 
 
