@@ -447,9 +447,26 @@ export default function ExhibitionDetailPage() {
                       </div>
                       <div>
                         <span className="font-semibold text-gray-400 block mb-1">Venue Hall & Address</span>
-                        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-200">
-                          <MapPin size={13} className="text-accent-400" />
-                          <span>{exhibition.venue} {exhibition.address ? `(${exhibition.address})` : ''}</span>
+                        <div className="flex items-start gap-1.5 text-xs font-medium text-gray-200">
+                          <MapPin size={13} className="text-accent-400 shrink-0 mt-0.5" />
+                          <div>
+                            {exhibition.location ? (
+                              <>
+                                <span className="font-semibold text-gray-100 block">{exhibition.location.venueName}</span>
+                                <span className="block text-gray-400 text-[11px] mt-0.5">
+                                  {[
+                                    exhibition.location.address,
+                                    exhibition.location.city,
+                                    exhibition.location.state,
+                                    exhibition.location.country,
+                                    exhibition.location.postalCode,
+                                  ].filter(Boolean).join(', ')}
+                                </span>
+                              </>
+                            ) : (
+                              <span>{exhibition.venue} {exhibition.address ? `(${exhibition.address})` : ''}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

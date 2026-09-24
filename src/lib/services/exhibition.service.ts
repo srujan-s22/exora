@@ -35,8 +35,13 @@ export const ExhibitionService = {
     }
 
     // 2. Create the Exhibition document
+    const venue = data.venue || data.location?.venueName || '';
+    const address = data.address || data.location?.address || '';
+
     const doc = await ExhibitionModel.create({
       ...data,
+      venue,
+      address,
       slug,
       status: 'draft', // initial state is draft
       createdBy: new mongoose.Types.ObjectId(userId),
@@ -177,6 +182,15 @@ export const ExhibitionService = {
     if (data.category !== undefined) doc.category = data.category;
     if (data.venue !== undefined) doc.venue = data.venue;
     if (data.address !== undefined) doc.address = data.address;
+    if (data.location !== undefined) {
+      doc.location = data.location;
+      if (data.location?.venueName && data.venue === undefined) {
+        doc.venue = data.location.venueName;
+      }
+      if (data.location?.address && data.address === undefined) {
+        doc.address = data.location.address;
+      }
+    }
     if (data.startDate !== undefined) doc.startDate = new Date(data.startDate);
     if (data.endDate !== undefined) doc.endDate = new Date(data.endDate);
     if (data.ticketTypes !== undefined) doc.ticketTypes = data.ticketTypes as any;

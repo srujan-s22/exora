@@ -46,8 +46,12 @@ export default function NewExhibitionPage() {
   const [name, setName] = React.useState('');
   const [category, setCategory] = React.useState('general');
   const [description, setDescription] = React.useState('');
-  const [venue, setVenue] = React.useState('');
+  const [venueName, setVenueName] = React.useState('');
   const [address, setAddress] = React.useState('');
+  const [city, setCity] = React.useState('');
+  const [state, setState] = React.useState('');
+  const [country, setCountry] = React.useState('');
+  const [postalCode, setPostalCode] = React.useState('');
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [capacity, setCapacity] = React.useState('');
@@ -135,13 +139,20 @@ export default function NewExhibitionPage() {
     const newErrors: Record<string, string> = {};
 
     if (!name.trim()) newErrors.name = 'Exhibition name is required';
-    if (!venue.trim()) newErrors.venue = 'Venue name is required';
     if (!startDate) newErrors.startDate = 'Start date is required';
     if (!endDate) newErrors.endDate = 'End date is required';
 
     if (startDate && endDate && new Date(endDate) <= new Date(startDate)) {
       newErrors.endDate = 'End date must be after the start date';
     }
+
+    // Validate location fields
+    if (!venueName.trim()) newErrors.venueName = 'Venue name is required';
+    if (!address.trim()) newErrors.address = 'Address is required';
+    if (!city.trim()) newErrors.city = 'City is required';
+    if (!state.trim()) newErrors.state = 'State is required';
+    if (!country.trim()) newErrors.country = 'Country is required';
+    if (!postalCode.trim()) newErrors.postalCode = 'Postal code is required';
 
     // Validate ticket types
     ticketTypes.forEach((t, index) => {
@@ -191,8 +202,16 @@ export default function NewExhibitionPage() {
         name: name.trim(),
         category,
         description: description.trim() || undefined,
-        venue: venue.trim(),
-        address: address.trim() || undefined,
+        venue: venueName.trim(),
+        address: address.trim(),
+        location: {
+          venueName: venueName.trim(),
+          address: address.trim(),
+          city: city.trim(),
+          state: state.trim(),
+          country: country.trim(),
+          postalCode: postalCode.trim(),
+        },
         startDate: new Date(startDate).toISOString(),
         endDate: new Date(endDate).toISOString(),
         ticketTypes: mappedTicketTypes,
@@ -210,6 +229,14 @@ export default function NewExhibitionPage() {
 
       const body = await res.json();
       if (!res.ok) {
+        if (body.error?.details) {
+          const apiFieldErrors: Record<string, string> = {};
+          for (const [key, msgs] of Object.entries(body.error.details)) {
+            const shortKey = key.replace('location.', '');
+            apiFieldErrors[shortKey] = Array.isArray(msgs) ? msgs[0] : String(msgs);
+          }
+          setErrors(apiFieldErrors);
+        }
         throw new Error(body.error?.message || 'Failed to create exhibition');
       }
 
@@ -292,12 +319,12 @@ export default function NewExhibitionPage() {
           </CardContent>
         </Card>
 
-        {/* Step 2: Date & Venue Configuration Card */}
+        {/* Step 2: Timeframe & Capacity Card */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <MapPin size={18} className="text-accent-400" />
-              <span>Timeframe & Venue Setup</span>
+              <Calendar size={18} className="text-accent-400" />
+              <span>Timeframe & Capacity Setup</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -323,33 +350,85 @@ export default function NewExhibitionPage() {
                 required
               />
             </div>
+            <Input
+              label="Maximum Cap (Visitors Capacity)"
+              placeholder="e.g. 5000 (leave blank or 0 for unlimited)"
+              type="number"
+              value={capacity}
+              onChange={(e) => setCapacity(e.target.value)}
+              disabled={isSubmitting}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Step 3: Venue & Location Configuration Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin size={18} className="text-accent-400" />
+              <span>Venue & Location</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              label="Venue Name"
+              placeholder="e.g. Hall A, Pragati Maidan"
+              value={venueName}
+              onChange={(e) => setVenueName(e.target.value)}
+              error={errors.venueName}
+              disabled={isSubmitting}
+              required
+            />
+            <Textarea
+              label="Address"
+              placeholder="Street address or landmark..."
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              error={errors.address}
+              disabled={isSubmitting}
+              rows={2}
+              required
+            />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
-                label="Venue Name"
-                placeholder="e.g. Hall A, Pragati Maidan"
-                value={venue}
-                onChange={(e) => setVenue(e.target.value)}
-                error={errors.venue}
+                label="City"
+                placeholder="e.g. New Delhi"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                error={errors.city}
                 disabled={isSubmitting}
                 required
               />
               <Input
-                label="Maximum Cap (Visitors Capacity)"
-                placeholder="e.g. 5000 (leave blank or 0 for unlimited)"
-                type="number"
-                value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
+                label="State"
+                placeholder="e.g. Delhi"
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                error={errors.state}
                 disabled={isSubmitting}
+                required
               />
             </div>
-            <Textarea
-              label="Venue Address"
-              placeholder="Enter full physical address..."
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              disabled={isSubmitting}
-              rows={2}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Country"
+                placeholder="e.g. India"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                error={errors.country}
+                disabled={isSubmitting}
+                required
+              />
+              <Input
+                label="Postal Code"
+                placeholder="e.g. 110001"
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value)}
+                error={errors.postalCode}
+                disabled={isSubmitting}
+                required
+              />
+            </div>
           </CardContent>
         </Card>
 

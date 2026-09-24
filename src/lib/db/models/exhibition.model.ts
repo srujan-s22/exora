@@ -7,6 +7,17 @@ export interface ITicketType {
   maxQuantity?: number;
 }
 
+export interface IExhibitionLocation {
+  venueName: string;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  postalCode: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
 export interface IExhibitionSettings {
   allowMultiEntry: boolean;
   maxScansPerTicket: number;
@@ -19,6 +30,7 @@ export interface IExhibition extends Document {
   category: string;
   venue: string;
   address?: string;
+  location?: IExhibitionLocation | null;
   startDate: Date;
   endDate: Date;
   ticketTypes: ITicketType[];
@@ -63,6 +75,20 @@ const ExhibitionSettingsSchema = new Schema<IExhibitionSettings>(
   { _id: false }
 );
 
+const ExhibitionLocationSchema = new Schema<IExhibitionLocation>(
+  {
+    venueName: { type: String, required: true, trim: true },
+    address: { type: String, required: true, trim: true },
+    city: { type: String, required: true, trim: true },
+    state: { type: String, required: true, trim: true },
+    country: { type: String, required: true, trim: true },
+    postalCode: { type: String, required: true, trim: true },
+    latitude: { type: Number, min: -90, max: 90 },
+    longitude: { type: Number, min: -180, max: 180 },
+  },
+  { _id: false }
+);
+
 const ExhibitionSchema = new Schema<IExhibition>(
   {
     name: {
@@ -94,6 +120,11 @@ const ExhibitionSchema = new Schema<IExhibition>(
     address: {
       type: String,
       trim: true,
+    },
+    location: {
+      type: ExhibitionLocationSchema,
+      required: false,
+      default: null,
     },
     startDate: {
       type: Date,

@@ -44,8 +44,13 @@ export default function EditExhibitionPage() {
   const [name, setName] = React.useState('');
   const [category, setCategory] = React.useState('general');
   const [description, setDescription] = React.useState('');
-  const [venue, setVenue] = React.useState('');
+  const [hasExistingLocation, setHasExistingLocation] = React.useState(false);
+  const [venueName, setVenueName] = React.useState('');
   const [address, setAddress] = React.useState('');
+  const [city, setCity] = React.useState('');
+  const [state, setState] = React.useState('');
+  const [country, setCountry] = React.useState('');
+  const [postalCode, setPostalCode] = React.useState('');
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [capacity, setCapacity] = React.useState('');
@@ -139,8 +144,23 @@ export default function EditExhibitionPage() {
           setName(exh.name);
           setCategory(exh.category || 'general');
           setDescription(exh.description || '');
-          setVenue(exh.venue);
-          setAddress(exh.address || '');
+          if (exh.location) {
+            setHasExistingLocation(true);
+            setVenueName(exh.location.venueName || '');
+            setAddress(exh.location.address || '');
+            setCity(exh.location.city || '');
+            setState(exh.location.state || '');
+            setCountry(exh.location.country || '');
+            setPostalCode(exh.location.postalCode || '');
+          } else {
+            setHasExistingLocation(false);
+            setVenueName('');
+            setAddress('');
+            setCity('');
+            setState('');
+            setCountry('');
+            setPostalCode('');
+          }
           setStartDate(formatDatetimeLocal(exh.startDate));
           setEndDate(formatDatetimeLocal(exh.endDate));
           setCapacity(exh.capacity ? exh.capacity.toString() : '');
@@ -202,12 +222,31 @@ export default function EditExhibitionPage() {
     const newErrors: Record<string, string> = {};
 
     if (!name.trim()) newErrors.name = 'Exhibition name is required';
-    if (!venue.trim()) newErrors.venue = 'Venue name is required';
     if (!startDate) newErrors.startDate = 'Start date is required';
     if (!endDate) newErrors.endDate = 'End date is required';
 
     if (startDate && endDate && new Date(endDate) <= new Date(startDate)) {
       newErrors.endDate = 'End date must be after the start date';
+    }
+
+    const hasAnyLocationInput = Boolean(
+      venueName.trim() ||
+      address.trim() ||
+      city.trim() ||
+      state.trim() ||
+      country.trim() ||
+      postalCode.trim()
+    );
+
+    // If exhibition already has location configured, or user entered any location information,
+    // require all 6 location fields.
+    if (hasExistingLocation || hasAnyLocationInput) {
+      if (!venueName.trim()) newErrors.venueName = 'Venue name is required';
+      if (!address.trim()) newErrors.address = 'Address is required';
+      if (!city.trim()) newErrors.city = 'City is required';
+      if (!state.trim()) newErrors.state = 'State is required';
+      if (!country.trim()) newErrors.country = 'Country is required';
+      if (!postalCode.trim()) newErrors.postalCode = 'Postal code is required';
     }
 
     // Validate ticket types
@@ -254,12 +293,19 @@ export default function EditExhibitionPage() {
       // Calculate entryFee as standard ticket fee (e.g. price of first ticket type)
       const primaryFee = mappedTicketTypes.length > 0 ? mappedTicketTypes[0].price : 0;
 
-      const payload = {
+      const hasAnyLocationInput = Boolean(
+        venueName.trim() ||
+        address.trim() ||
+        city.trim() ||
+        state.trim() ||
+        country.trim() ||
+        postalCode.trim()
+      );
+
+      const payload: Record<string, any> = {
         name: name.trim(),
         category,
         description: description.trim() || undefined,
-        venue: venue.trim(),
-        address: address.trim() || undefined,
         startDate: new Date(startDate).toISOString(),
         endDate: new Date(endDate).toISOString(),
         ticketTypes: mappedTicketTypes,
@@ -270,6 +316,19 @@ export default function EditExhibitionPage() {
         notes: notes.trim() || undefined,
       };
 
+      if (hasExistingLocation || hasAnyLocationInput) {
+        payload.venue = venueName.trim();
+        payload.address = address.trim();
+        payload.location = {
+          venueName: venueName.trim(),
+          address: address.trim(),
+          city: city.trim(),
+          state: state.trim(),
+          country: country.trim(),
+          postalCode: postalCode.trim(),
+        };
+      }
+
       const res = await fetch(`/api/exhibitions/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -278,6 +337,14 @@ export default function EditExhibitionPage() {
 
       const body = await res.json();
       if (!res.ok) {
+        if (body.error?.details) {
+          const apiFieldErrors: Record<string, string> = {};
+          for (const [key, msgs] of Object.entries(body.error.details)) {
+            const shortKey = key.replace('location.', '');
+            apiFieldErrors[shortKey] = Array.isArray(msgs) ? msgs[0] : String(msgs);
+          }
+          setErrors(apiFieldErrors);
+        }
         throw new Error(body.error?.message || 'Failed to update exhibition');
       }
 
@@ -398,12 +465,12 @@ export default function EditExhibitionPage() {
           </CardContent>
         </Card>
 
-        {/* Step 2: Date & Venue Configuration Card */}
+        {/* Step 2: Date & Timeframe Card */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <MapPin size={18} className="text-accent-400" />
-              <span>Timeframe & Venue Setup</span>
+              <Calendar size={18} className="text-accent-400" />
+              <span>Timeframe & Schedule</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -429,23 +496,77 @@ export default function EditExhibitionPage() {
                 required
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Step 3: Venue & Location Configuration Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin size={18} className="text-accent-400" />
+              <span>Venue & Location</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!hasExistingLocation && (
+              <div className="text-xs text-amber-400/90 bg-amber-950/20 border border-amber-800/30 p-3 rounded-lg flex items-center gap-2">
+                <MapPin size={14} className="shrink-0 text-amber-400" />
+                <span>Location not configured yet. Configure venue and geographical address below.</span>
+              </div>
+            )}
             <Input
               label="Venue Name"
               placeholder="e.g. Hall A, Pragati Maidan"
-              value={venue}
-              onChange={(e) => setVenue(e.target.value)}
-              error={errors.venue}
+              value={venueName}
+              onChange={(e) => setVenueName(e.target.value)}
+              error={errors.venueName}
               disabled={isSubmitting}
-              required
             />
             <Textarea
-              label="Venue Address"
-              placeholder="Enter full physical address..."
+              label="Address"
+              placeholder="Street address or physical landmark..."
               value={address}
               onChange={(e) => setAddress(e.target.value)}
+              error={errors.address}
               disabled={isSubmitting}
               rows={2}
             />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="City"
+                placeholder="e.g. New Delhi"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                error={errors.city}
+                disabled={isSubmitting}
+              />
+              <Input
+                label="State"
+                placeholder="e.g. Delhi"
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+                error={errors.state}
+                disabled={isSubmitting}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Country"
+                placeholder="e.g. India"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                error={errors.country}
+                disabled={isSubmitting}
+              />
+              <Input
+                label="Postal Code"
+                placeholder="e.g. 110001"
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value)}
+                error={errors.postalCode}
+                disabled={isSubmitting}
+              />
+            </div>
           </CardContent>
         </Card>
 

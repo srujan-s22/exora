@@ -18,4 +18,5 @@ Master index of all completed engineering updates for the **Exora** platform.
 | **[U008](./updates/u008-exhibition-scoped-cancellation-notifications.md)** | 2026-08-10 | Exhibition-Scoped Cancellation Notifications & Column Updates | Implemented | Scoped cancellation request notifications & queue to assigned admins, and replaced Price with Tickets Purchased in admin tickets/rides menus. |
 | **[U009](./updates/u009-srs-4.0-specification.md)** | 2026-08-11 | Software Requirements Specification (SRS) 4.0 | Completed | Upgraded and consolidated SRS reference document to version 4.0 incorporating updates U001 through U008. |
 | **[U010](./updates/u010-security-idor-scope-hardening.md)** | 2026-09-17 | Security IDOR Remediation & Counter Sale Scope Hardening | Implemented | Remediated cross-exhibition authorization bypass on /api/exhibitions/[id] routes and restored Super Admin sales scoping. |
+| **[U011](./updates/u011-exhibition-location-system.md)** | 2026-09-24 | Exhibition Venue & Location System (Step 1) | Implemented | Added backward-compatible venue and address structure, Zod validation, and Create/Edit UI workflows. |
 

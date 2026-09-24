@@ -12,12 +12,24 @@ const exhibitionSettingsSchema = z.object({
   maxScansPerTicket: z.number().int().min(1).default(1),
 });
 
+export const exhibitionLocationSchema = z.object({
+  venueName: z.string().min(1, 'Venue name is required').max(200, 'Venue name cannot exceed 200 characters').trim(),
+  address: z.string().min(1, 'Address is required').max(500, 'Address cannot exceed 500 characters').trim(),
+  city: z.string().min(1, 'City is required').max(100, 'City cannot exceed 100 characters').trim(),
+  state: z.string().min(1, 'State is required').max(100, 'State cannot exceed 100 characters').trim(),
+  country: z.string().min(1, 'Country is required').max(100, 'Country cannot exceed 100 characters').trim(),
+  postalCode: z.string().min(1, 'Postal code is required').max(20, 'Postal code cannot exceed 20 characters').trim(),
+  latitude: z.number().min(-90, 'Latitude must be between -90 and 90').max(90, 'Latitude must be between -90 and 90').nullable().optional(),
+  longitude: z.number().min(-180, 'Longitude must be between -180 and 180').max(180, 'Longitude must be between -180 and 180').nullable().optional(),
+});
+
 export const createExhibitionSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200).trim(),
   description: z.string().max(2000).trim().optional(),
   category: z.string().min(1, 'Category is required').max(100).trim().default('general'),
-  venue: z.string().min(1, 'Venue is required').max(200).trim(),
+  venue: z.string().max(200).trim().optional(),
   address: z.string().max(500).trim().optional(),
+  location: exhibitionLocationSchema,
   startDate: z.string().datetime({ message: 'Invalid start date' }),
   endDate: z.string().datetime({ message: 'Invalid end date' }),
   ticketTypes: z
@@ -41,6 +53,7 @@ export const updateExhibitionSchema = z.object({
   category: z.string().min(1).max(100).trim().optional(),
   venue: z.string().min(1).max(200).trim().optional(),
   address: z.string().max(500).trim().optional(),
+  location: exhibitionLocationSchema.nullable().optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
   ticketTypes: z.array(ticketTypeSchema).min(1).optional(),
@@ -58,3 +71,4 @@ export const updateExhibitionSchema = z.object({
 
 export type CreateExhibitionInput = z.infer<typeof createExhibitionSchema>;
 export type UpdateExhibitionInput = z.infer<typeof updateExhibitionSchema>;
+export type ExhibitionLocationInput = z.infer<typeof exhibitionLocationSchema>;

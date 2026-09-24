@@ -11,6 +11,17 @@ export interface ExhibitionSettings {
   maxScansPerTicket: number;
 }
 
+export interface ExhibitionLocation {
+  venueName: string;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  postalCode: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
 export interface Exhibition {
   id: string;
   name: string;
@@ -19,6 +30,7 @@ export interface Exhibition {
   category: string;
   venue: string;
   address?: string;
+  location?: ExhibitionLocation | null;
   startDate: Date;
   endDate: Date;
   ticketTypes: TicketTypeConfig[];
@@ -43,8 +55,9 @@ export interface CreateExhibitionInput {
   name: string;
   description?: string;
   category?: string;
-  venue: string;
+  venue?: string;
   address?: string;
+  location?: ExhibitionLocation;
   startDate: string;
   endDate: string;
   ticketTypes: TicketTypeConfig[];
@@ -63,6 +76,7 @@ export interface UpdateExhibitionInput {
   category?: string;
   venue?: string;
   address?: string;
+  location?: ExhibitionLocation | null;
   startDate?: string;
   endDate?: string;
   ticketTypes?: TicketTypeConfig[];
